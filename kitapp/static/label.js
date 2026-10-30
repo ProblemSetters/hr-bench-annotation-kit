@@ -1,7 +1,7 @@
 // Annotator workspace. Three sections, each with one job:
 //   Steps       read each step and label it (parts 2 and 3)
 //   Final build the finished repo, answers, scores and logs, for reference
-//   Wrap up     grade the session, list failures, submit (parts 1 and 4)
+//   Wrap up     grade the session, review the mistakes marked on steps, submit
 // Everything from a build is untrusted text. It is only inserted as text nodes, never as HTML.
 (function () {
   'use strict';
@@ -12,14 +12,14 @@
   const T = KIT ? {
     wrap: 'Wrap up & finish', done: 'finished', doneTitle: 'Finished', todoTitle: 'Mark this task as finished', button: 'Mark as finished', busy: 'Saving…',
     doneNote: 'Your answers are saved in your annotations folder. Reopen the task if you need to change something.',
-    readyNote: 'You can reopen it later if you need to.', intro: 'When all four parts are done, mark the task as finished.',
+    readyNote: 'You can reopen it later if you need to.', intro: 'When all three parts are done, mark the task as finished.',
     confirm: 'Mark this task as finished? You can reopen it later.', readonly: 'Finished. Reopen it on the Wrap up page to make changes.',
     viewing: (done) => `You are viewing this person's labels (${done ? 'finished' : 'not finished yet'}). Nothing can be changed.`,
     loadHelp: 'Reload the page. If it keeps happening, copy this task folder again from the zip you were sent.',
   } : {
     wrap: 'Wrap up & submit', done: 'submitted', doneTitle: 'Submitted', todoTitle: 'Submit this task', button: 'Submit task', busy: 'Submitting…',
     doneNote: 'Your labels are locked. Ask the admin if something needs to change.',
-    readyNote: 'After you submit, your labels are locked.', intro: 'When all four parts are done, submit.',
+    readyNote: 'After you submit, your labels are locked.', intro: 'When all three parts are done, submit.',
     confirm: 'Submit this task? Your labels will be locked unless the admin reopens it.', readonly: 'Submitted. This task is read only.',
     viewing: (done) => `You are viewing this person's labels (${done ? 'submitted' : 'not submitted yet'}). Nothing can be changed.`,
     loadHelp: 'Reload the page, or tell the admin if it keeps happening.',
@@ -124,8 +124,12 @@
   }
   const isEmpty = (x) => x === null || x === undefined || x === '' || (Array.isArray(x) && !x.length);
   // ck: the step's automatic checks. Some questions only apply where a check fired (for example, the agent asked a question).
-  const isReq = (f, v, ck) => f.required || Object.entries(f.required_if || {}).some(([k, want]) => v[k] === want) || !!(f.required_if_check && (ck || {})[f.required_if_check]);
-  const shown = (f, ck) => !f.show_if_check || !!(ck || {})[f.show_if_check];
+  // show_if: a follow-up question that applies only when another answer has this value (the mistake details).
+  // optional_if: a question that may stay empty for some answers ("continue" asks for nothing new).
+  const visible = (f, v) => Object.entries(f.show_if || {}).every(([k, want]) => (v || {})[k] === want);
+  const isReq = (f, v, ck) => visible(f, v) && !Object.entries(f.optional_if || {}).some(([k, want]) => v[k] === want) &&
+    (f.required || Object.entries(f.required_if || {}).some(([k, want]) => v[k] === want) || !!(f.required_if_check && (ck || {})[f.required_if_check]));
+  const shown = (f, ck, v) => (!f.show_if_check || !!(ck || {})[f.show_if_check]) && visible(f, v);
   function fieldsOk(fields, v, ck) {
     if (!v) return false;
     return fields.every((f) => {
@@ -211,8 +215,8 @@
   function renderTaskbar() {
     const r = route(), L = labelable();
     const doneSteps = L.filter((s) => stepState(s) === 'done').length;
-    const parts = ['session', 'failures'].filter((p) => S.progress[p][0] === S.progress[p][1]).length;
-    const totalUnits = 2 * L.length + 2;
+    const parts = S.progress.session[0] === S.progress.session[1] ? 1 : 0;
+    const totalUnits = 2 * L.length + 1;
     const doneUnits = S.progress.steps[0] + S.progress.prompts[0] + parts;
     $('t-prog').textContent = `${doneSteps} of ${L.length} steps labelled`;
     $('t-bar').style.width = (totalUnits ? Math.round(100 * doneUnits / totalUnits) : 0) + '%';
@@ -222,7 +226,7 @@
       el('a', { href: stepHash(s0), 'aria-current': r.mode === 'steps' ? 'page' : null }, 'Steps', el('span', { class: 'n num' }, `${doneSteps}/${L.length}`)),
       el('a', { href: '#/final/summary', 'aria-current': r.mode === 'final' ? 'page' : null }, 'Final build'),
       el('a', { href: '#/wrap', 'aria-current': r.mode === 'wrap' ? 'page' : null }, T.wrap,
-        el('span', { class: 'n' }, S.status === 'submitted' ? T.done : S.complete ? 'ready' : `${Object.values(S.progress).filter(([d, t]) => d === t).length}/4 parts`)));
+        el('span', { class: 'n' }, S.status === 'submitted' ? T.done : S.complete ? 'ready' : `${Object.values(S.progress).filter(([d, t]) => d === t).length}/${Object.keys(S.progress).length} parts`)));
   }
 
   function render() {
@@ -559,7 +563,6 @@
   function checkFacts(s) {
     const ck = s.checks || {};
     const out = [];
-    if (ck.asked) out.push(el('span', { class: 'flag' }, ck.asked > 1 ? `Asked the human ${ck.asked} questions` : 'Asked the human a question'));
     if ((ck.claims || []).length) out.push(el('a', { href: stepHash(s, 'checks'), class: 'flag warn' }, plural(ck.claims.length, 'reported number') + ' to check'));
     if ((ck.test_edits || []).length) out.push(el('a', { href: stepHash(s, 'changes'), class: 'flag', title: ck.test_edits.map(relPath).join(', ') }, 'Edited test or grader files'));
     if ((ck.answer_edits || []).length) out.push(el('a', { href: stepHash(s, 'changes'), class: 'flag warn', title: ck.answer_edits.map(relPath).join(', ') }, 'Wrote an answer file directly'));
@@ -622,7 +625,8 @@
   const GUIDE_FOR = { effect: 'effect', human_corrected: 'corrections', reverted: 'corrections', intent: 'intent', source: 'source',
                       steering_quality: 'session', agent_quality: 'session', training_value: 'session', type: 'session',
                       behaviours: 'session', involvement: 'session', confidence: 'session', noticed: 'session',
-                      reaction: 'intent', asked_needed: 'corrections', should_have_asked: 'corrections', claims_match: 'session', earned: 'session' };
+                      reaction: 'reaction', asked: 'corrections', should_have_asked: 'corrections', claims_match: 'session', earned: 'session',
+                      failure: 'mistakes', failure_types: 'mistakes', noticed: 'mistakes' };
   let guideReturn = null;
   function closeGuide() {
     const d = $('guide'); if (!d) return;
@@ -681,9 +685,9 @@
     const kind = trivialKind(s);
     const filled = [];
     const pv = { ...(S.labels[key('prompts', s.id)] || {}) };
-    if (!(pv.intent || []).length) { pv.intent = [kind === 'slash' ? 'Not a real prompt' : 'Go ahead or continue']; filled.push('what the prompt asks for'); }
+    if (kind === 'slash' && !(pv.intent || []).length) { pv.intent = ['Not a real prompt']; filled.push('what the prompt asks for'); }
     if (!pv.source) { pv.source = 'Typed by the human'; filled.push('who wrote it'); }
-    if (!pv.reaction && kind === 'goahead') { pv.reaction = 'Goes ahead or approves'; filled.push('how it reacts'); }
+    if (!pv.reaction) { pv.reaction = kind === 'slash' ? 'Not replying to the agent (first prompt, or a new topic)' : 'Accepting it and moving on'; filled.push('what the human is doing'); }
     if (filled.length) save('prompts', s.id, pv);
     const sv = { ...(S.labels[key('steps', s.id)] || {}) };
     if (!sv.effect && quietStep(s)) { sv.effect = 'Neutral'; save('steps', s.id, sv); filled.push('Neutral, because the agent did almost nothing'); }
@@ -742,9 +746,14 @@
     const SOURCE_HINT = { choice: 'The human picked one of the options the coding tool offered, so it was typed or clicked by the human.', paste: 'The trace shows pasted text inside this prompt.', slash: 'This is a slash command typed into the coding tool.' };
     body.append(partFields('steps', s.id), el('div', { class: 'divider' }), partFields('prompts', s.id),
       SOURCE_HINT[s.prompt.hint] ? el('p', { class: 'help evidence' }, 'Evidence: ' + SOURCE_HINT[s.prompt.hint]) : null);
+    // Personal info should already be scrubbed; this is only a way to report anything that slipped through.
     const fv = { ...(S.labels[key('flags', s.id)] || {}) };
-    for (const fl of S.schema.flags || []) body.append(el('label', { class: 'flagline' },
-      el('input', { type: 'checkbox', checked: !!fv[fl.id], disabled: READONLY, onchange: (e) => { fv[fl.id] = e.target.checked; save('flags', s.id, { ...fv }); } }), fl.label));
+    const pii = el('p', { class: 'small report' });
+    const drawPii = () => clear(pii).append(fv.pii
+      ? [el('span', { class: 'badge warn' }, 'Personal info reported'), ' ', READONLY ? null : el('button', { class: 'linkbtn', onclick: () => { fv.pii = false; save('flags', s.id, { ...fv }); drawPii(); } }, 'Undo')]
+      : READONLY ? [] : el('button', { class: 'linkbtn', onclick: () => { fv.pii = true; save('flags', s.id, { ...fv }); drawPii(); } }, 'Report personal info in this step'));
+    drawPii();
+    body.append(pii);
     const prev = idx > 0 ? L[idx - 1] : null, next = L[idx + 1];
     const todo = L.find((x, i) => i > idx && stepState(x) !== 'done') || L.find((x) => stepState(x) !== 'done' && x !== s);
     const foot = el('div', { class: 'labels-foot' },
@@ -768,8 +777,9 @@
     };
     const step = S.steps.find((x) => x.id === target), ck = step && step.checks;
     for (const f of p.fields) {
-      if (!shown(f, ck)) continue;
-      box.append(field(f, v, (x, opts = {}) => { v[f.id] = x; save(pid, target, { ...v }); if (!opts.quiet) redraw(opts.focus); }, `${pid}-${target}-${f.id}`, ck));
+      if (!shown(f, ck, v)) continue;
+      const reveals = p.fields.some((x) => x.show_if && f.id in x.show_if);  // ticking it opens follow-up questions
+      box.append(field(f, v, (x, opts = {}) => { v[f.id] = x; save(pid, target, { ...v }); if (!opts.quiet) redraw(opts.focus); }, `${pid}-${target}-${f.id}`, ck, reveals));
       if (pid === 'steps' && f.id === 'reverted') {
         const s = S.steps.find((x) => x.id === target);
         const h = s && laterChanges(s);
@@ -779,13 +789,14 @@
     return box;
   }
 
-  function field(f, v, set, fid, ck) {
+  function field(f, v, set, fid, ck, reveals) {
     const value = v[f.id], dis = READONLY;
     const req = isReq(f, v, ck);
     const wrap = el('div', { class: 'field' });
     const q = el('span', { class: 'q', id: fid + '-q' }, f.label.replace(/ \(required if Hurt\)/, ''), req ? el('span', { class: 'req', 'aria-hidden': 'true' }, '*') : null,
       GUIDE_FOR[f.id] && f.type !== 'bool' ? guideLink(GUIDE_FOR[f.id]) : null);
     if (f.type !== 'bool') wrap.append(q);
+    if (f.help && f.type !== 'bool' && f.type !== 'checklist') wrap.append(el('div', { class: 'help above' }, f.help));
     if (f.type === 'scale') {
       const row = el('div', { class: 'scale', role: 'group', 'aria-labelledby': fid + '-q' });
       for (let i = f.min; i <= f.max; i++) row.append(el('button', { 'aria-pressed': String(value === i), disabled: dis, 'data-fid': `${fid}-${i}`, title: (f.anchors || {})[i] || '', onclick: () => set(i, { focus: `${fid}-${i}` }) }, i));
@@ -808,7 +819,9 @@
         !showAll ? el('button', { class: 'ghost more', onclick: () => { S.showAll = true; set(value || [], {}); } }, `+${f.options.length - FEW} more`) : null));
     } else if (f.type === 'bool') {
       wrap.className = 'field tight';
-      wrap.append(el('label', { class: 'toggle' }, el('input', { type: 'checkbox', checked: !!value, disabled: dis, onchange: (e) => set(e.target.checked, { quiet: true }) }), el('span', {}, f.label)));
+      wrap.append(el('label', { class: 'toggle' }, el('input', { type: 'checkbox', checked: !!value, disabled: dis, 'data-fid': fid + '-cb',
+        onchange: (e) => set(e.target.checked, reveals ? { focus: fid + '-cb' } : { quiet: true }) }), el('span', {}, f.label)));
+      if (f.help) wrap.append(el('div', { class: 'help' }, f.help));
     } else if (f.type === 'text' && !req && !value && !(S.openNotes || new Set()).has(fid)) {
       wrap.replaceChildren(el('button', { class: 'ghost sm addnote', disabled: dis, onclick: () => { (S.openNotes = S.openNotes || new Set()).add(fid); set(value || '', { focus: fid + '-ta' }); } }, '+ Add a note'));
     } else if (f.type === 'text') {
@@ -1063,18 +1076,17 @@
   function renderWrap() {
     const P = S.progress, L = labelable();
     const pane = el('div', { class: 'pane', style: { maxWidth: '820px', margin: '0 auto', width: '100%' } });
-    pane.append(el('div', { class: 'stephead-row' }, el('h1', {}, T.wrap), el('span', { class: 'spacer' }), S.schema.guide ? el('button', { class: 'ghost sm', onclick: () => openGuide('session') }, 'How to label') : null), el('p', { class: 'muted', style: { margin: '4px 0 16px' } }, 'Grade the session as a whole and list any agent failures. ' + T.intro));
+    pane.append(el('div', { class: 'stephead-row' }, el('h1', {}, T.wrap), el('span', { class: 'spacer' }), S.schema.guide ? el('button', { class: 'ghost sm', onclick: () => openGuide('session') }, 'How to label') : null), el('p', { class: 'muted', style: { margin: '4px 0 16px' } }, 'Grade the session as a whole and check the mistakes you marked. ' + T.intro));
     const item = (ok, title, sub, action) => el('li', {}, el('span', { class: 'sticon ' + (ok ? 'done' : 'todo'), 'aria-hidden': 'true' }),
       el('div', { class: 'grow' }, el('b', {}, title), el('div', { class: 'small muted' }, sub)), action || null);
     const todo = nextTodo();
     pane.append(el('section', { class: 'card' }, el('ul', { class: 'checklist' },
-      item(P.session[0] === 1, 'Part 1. Session grade', P.session[0] ? 'Done' : 'Fill in the form below'),
-      item(P.steps[0] === P.steps[1], 'Part 2. Step labels', `${P.steps[0]} of ${P.steps[1]} steps answered`, todo ? el('a', { class: 'btn sm', href: stepHash(todo) }, 'Go to the next one') : null),
-      item(P.prompts[0] === P.prompts[1], 'Part 3. Prompt labels', `${P.prompts[0]} of ${P.prompts[1]} prompts answered`),
-      item(P.failures[0] === 1, 'Part 4. Agent failures', P.failures[0] ? 'Done' : 'List failures below, or tick "none found"'))));
+      item(P.steps[0] === P.steps[1], 'Part 1. Step labels', `${P.steps[0]} of ${P.steps[1]} steps answered`, todo ? el('a', { class: 'btn sm', href: stepHash(todo) }, 'Go to the next one') : null),
+      item(P.prompts[0] === P.prompts[1], 'Part 2. Prompt labels', `${P.prompts[0]} of ${P.prompts[1]} prompts answered`),
+      item(P.session[0] === 1, 'Part 3. Session grade', P.session[0] ? 'Done' : 'Fill in the form below'))));
     const sp = part('session');
+    pane.append(el('section', { class: 'card' }, mistakesSummary()));
     pane.append(el('section', { class: 'card' }, el('h2', {}, sp.title), el('p', { class: 'small muted', style: { margin: '4px 0 14px' } }, sp.help), wrapPart('session')));
-    pane.append(el('section', { class: 'card' }, failuresForm()));
     const submitted = S.status === 'submitted';
     pane.append(el('section', { class: 'card' }, el('div', { class: 'card-head' }, el('div', {}, el('h2', {}, submitted ? T.doneTitle : T.todoTitle),
       el('p', { class: 'small muted', style: { marginTop: '4px' } }, submitted ? T.doneNote : S.complete ? T.readyNote : 'Finish the parts marked above first.')),
@@ -1120,47 +1132,27 @@
     }).catch(() => clear(box).append(el('h3', {}, 'The result'), el('p', { class: 'muted small' }, 'Could not load the result.')));
     return box;
   }
-  function failuresForm() {
-    const p = part('failures'), k = key('failures', '');
-    const v = S.labels[k] ? JSON.parse(JSON.stringify(S.labels[k])) : { none: false, items: [] };
-    const box = el('div', {});
-    const commit = (redraw) => { save('failures', '', JSON.parse(JSON.stringify(v))); if (redraw) box.replaceWith(failuresForm()); };
-    box.append(el('h2', {}, p.title), el('p', { class: 'small muted', style: { margin: '4px 0 14px' } }, p.help));
-    const listed = new Set(v.items.map((it) => it.step_id).filter(Boolean));
-    const hurt = labelable().filter((s) => (S.labels[key('steps', s.id)] || {}).effect === 'Hurt');
-    if (hurt.length) {
-      box.append(el('div', { class: 'suggest' },
-        el('div', { class: 'who-label' }, `Steps you marked Hurt (${hurt.length})`),
-        el('p', { class: 'small muted' }, 'Start from these. Adding one copies your note; then pick the type of failure.'),
-        el('ul', { class: 'cmdlist' }, hurt.map((s) => {
-          const note = (S.labels[key('steps', s.id)] || {}).note || '';
-          const added = listed.has(s.id);
-          return el('li', {}, el('span', { class: 'dot bad', 'aria-hidden': 'true' }),
-            el('span', { class: 'cmdtext' }, el('a', { href: stepHash(s), class: 'small' }, `Step ${s.n}`), el('span', { class: 'small' }, note || el('span', { class: 'muted' }, 'No note'))),
-            READONLY ? null : added ? el('span', { class: 'badge ok' }, 'Added') : el('button', { class: 'sm', onclick: () => {
-              v.items.push({ step_id: s.id, description: note }); v.none = false; commit(true);
-            } }, 'Add as a failure'));
-        }))));
-    }
-    const flagged = labelable().flatMap((s) => ((s.checks || {}).claims || []).map((c) => ({ s, c })));
+  // Every mistake marked on a step, plus the numbers the pipeline flagged, so nothing is missed before the session grade.
+  function mistakesSummary() {
+    const box = el('div', {}, el('h2', {}, 'Agent mistakes you marked'), el('p', { class: 'small muted', style: { margin: '4px 0 14px' } },
+      'Mark mistakes on the step where they happen. They are listed here so you can check them before you grade the session.'));
+    const marked = labelable().filter((s) => (S.labels[key('steps', s.id)] || {}).failure);
+    box.append(marked.length ? el('ul', { class: 'cmdlist' }, marked.map((s) => {
+      const v = S.labels[key('steps', s.id)] || {};
+      return el('li', {}, el('span', { class: 'dot bad', 'aria-hidden': 'true' }),
+        el('span', { class: 'cmdtext' }, el('a', { href: stepHash(s), class: 'small' }, `Step ${s.n}`),
+          el('span', { class: 'small' }, (v.failure_types || []).join(', ') || el('span', { class: 'muted' }, 'Type not picked yet')),
+          el('span', { class: 'small muted' }, [v.noticed, v.note].filter(Boolean).join('. '))));
+    })) : el('p', { class: 'muted small' }, 'No mistakes marked on any step.'));
+    const flagged = labelable().flatMap((s) => ((s.checks || {}).claims || []).map((c) => ({ s, c })))
+      .filter(({ s }) => !(S.labels[key('steps', s.id)] || {}).failure);
     if (flagged.length) {
-      box.append(el('div', { class: 'suggest' },
+      box.append(el('div', { class: 'suggest', style: { marginTop: '14px' } },
         el('div', { class: 'who-label' }, `Numbers the agent reported that no run backs up (${flagged.length})`),
-        el('p', { class: 'small muted' }, 'Check these before you answer "Did the claims match?". Add one as a failure only if it misled the human.'),
+        el('p', { class: 'small muted' }, 'Check these before you answer "Did the claims match?". If one misled the human, mark a mistake on that step.'),
         el('ul', { class: 'cmdlist' }, flagged.slice(0, 20).map(({ s, c }) => el('li', {}, el('span', { class: 'dot warn', 'aria-hidden': 'true' }),
-          el('span', { class: 'cmdtext' }, el('a', { href: stepHash(s, 'checks'), class: 'small' }, `Step ${s.n}`), el('span', { class: 'small' }, `${c.claim}${c.last_measured ? ', last measured ' + c.last_measured : ''}`)),
-          READONLY ? null : listed.has(s.id) ? el('span', { class: 'badge ok' }, 'Added') : el('button', { class: 'sm', onclick: () => {
-            v.items.push({ step_id: s.id, type: 'Claimed a result it did not get', description: `Reported ${c.claim}; ${c.last_measured ? 'the last measured run said ' + c.last_measured : 'no run measured it'}.` }); v.none = false; commit(true);
-          } }, 'Add as a failure'))))));
+          el('span', { class: 'cmdtext' }, el('a', { href: stepHash(s, 'checks'), class: 'small' }, `Step ${s.n}`), el('span', { class: 'small' }, `${c.claim}${c.last_measured ? ', last measured ' + c.last_measured : ''}`)))))));
     }
-    v.items.forEach((it, i) => {
-      const card = el('div', { class: 'card', style: { background: 'var(--raised)' } }, el('div', { class: 'card-head' }, el('b', {}, `Failure ${i + 1}`), el('span', { class: 'spacer' }),
-        READONLY ? null : el('button', { class: 'ghost sm danger', onclick: () => { v.items.splice(i, 1); commit(true); } }, 'Remove')));
-      for (const f of p.fields) card.append(field(f, it, (x, opts = {}) => { it[f.id] = x; v.none = false; commit(!opts.quiet); }, `fail-${i}-${f.id}`));
-      box.append(card);
-    });
-    if (!READONLY) box.append(el('button', { style: { margin: '10px 0' }, onclick: () => { v.items.push({}); v.none = false; S.labels[k] = v; box.replaceWith(failuresForm()); } }, '+ Add a failure'));
-    box.append(el('label', { class: 'check' }, el('input', { type: 'checkbox', checked: v.none && !v.items.length, disabled: READONLY || v.items.length > 0, onchange: (e) => { v.none = e.target.checked; commit(false); } }), el('span', {}, p.none_label)));
     return box;
   }
   async function submit() {

@@ -54,13 +54,13 @@ def finish_all(c, bid, steering=4):
     check = {b: {'answer': 'No'} for b in BEHAVIOURS}
     check['clarified_goal'] = {'answer': 'Yes', 'step': 'S1.1'}
     assert put('session', '', {'steering_quality': steering, 'agent_quality': 3, 'behaviours': check, 'involvement': 'They shared the work equally',
-                               'training_value': 'No', 'confidence': 'High', 'claims_match': 'Mostly',
+                               'confidence': 'High', 'claims_match': 'Mostly',
                                'earned': 'Partly: some luck, shortcuts or gaming',
                                'rationale': 'The human gave a clear brief and checked each result before moving on to the next part.'}).status_code == 200
     for sid in ('S1.1', 'S1.2'):
         assert put('steps', sid, {'effect': 'Helped'}).status_code == 200
-        assert put('prompts', sid, {'intent': ['Build a feature'], 'source': 'Typed by the human', 'reaction': 'Corrects the agent'}).status_code == 200
-    r = put('failures', '', {'none': True, 'items': []})
+        r = put('prompts', sid, {'intent': ['Build a feature'], 'source': 'Typed by the human', 'reaction': 'Fixing something the agent got wrong'})
+        assert r.status_code == 200
     assert r.json()['complete'] is True
     assert c.post(f'/api/t/{bid}/submit', headers=h).status_code == 200
     return h

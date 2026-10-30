@@ -53,7 +53,7 @@ The first time, the app asks for your **application id** (from our email), your 
 
 Open a task and work through it. Your answers save on their own, a moment after each click. The top bar says **All changes saved**.
 
-When all four parts of a build are done, go to **Wrap up & finish** and press **Mark as finished**. You can reopen a finished build if you need to change something.
+When all three parts of a build are done (step labels, prompt labels and the session grade), go to **Wrap up & finish** and press **Mark as finished**. You can reopen a finished build if you need to change something.
 
 ## 5. Send your work
 

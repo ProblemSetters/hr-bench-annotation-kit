@@ -330,7 +330,7 @@ if not REVIEW:
         ids = set(store.labelable_ids(bid))
         if pid in ('steps', 'prompts', 'flags') and target not in ids:
             raise HTTPException(400, 'Unknown step')
-        if pid in ('session', 'failures'):
+        if pid == 'session':
             target = ''
         try:
             value = L.clean_value(pid, body.get('value') or {}, ids)
@@ -466,7 +466,7 @@ else:
                         'schema_version': rec.get('schema_version'), 'finished_at': rec.get('finished_at'),
                         'task_fingerprint': rec.get('task_fingerprint'), 'calibration_build': t['bid'] in calib,
                         'active_seconds': t['secs'], 'active_seconds_by_step': rec.get('active_seconds_by_step') or {},
-                        'session': a.get('session'), 'failures': a.get('failures'), 'steps': a.get('steps') or {},
+                        'session': a.get('session'), 'failures': L.failures_of(R.to_map(a)), 'steps': a.get('steps') or {},
                         'prompts': a.get('prompts') or {}, 'flags': {k: v for k, v in (a.get('flags') or {}).items() if any(v.values())},
                     }, ensure_ascii=False) + '\n'
         return StreamingResponse(gen(), media_type='application/x-ndjson',

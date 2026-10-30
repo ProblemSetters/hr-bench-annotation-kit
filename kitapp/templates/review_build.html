@@ -13,7 +13,7 @@
   {% for p, t in rows %}<tr><td><a href="/review/a/{{ p.id }}"><b>{{ p.name }}</b></a><span class="cell-sub">{{ p.meta.email }}</span></td>
     <td class="small mono">{{ p.id }}</td>
     <td><span class="status {{ status_class[t.status] }}">{{ status_word[t.status] }}</span></td>
-    <td><div class="progress-cell"><progress max="100" value="{{ t.pct }}" class="{{ 'done' if t.complete }}"></progress><span class="small num">{{ t.parts }}/4 parts</span></div></td>
+    <td><div class="progress-cell"><progress max="100" value="{{ t.pct }}" class="{{ 'done' if t.complete }}"></progress><span class="small num">{{ t.parts }}/{{ t.prog|length }} parts</span></div></td>
     <td class="small num">{{ t.secs|dur }}</td>
     <td class="small">{{ t.rec.finished_at|when }}</td>
     <td class="num"><a class="btn sm" href="/review/view/{{ p.id }}/{{ bid }}">View labels</a></td></tr>
