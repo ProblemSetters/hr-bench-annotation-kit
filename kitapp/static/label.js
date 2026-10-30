@@ -123,12 +123,14 @@
     } catch (e) { return null; }
   }
   const isEmpty = (x) => x === null || x === undefined || x === '' || (Array.isArray(x) && !x.length);
-  const isReq = (f, v) => f.required || Object.entries(f.required_if || {}).some(([k, want]) => v[k] === want);
-  function fieldsOk(fields, v) {
+  // ck: the step's automatic checks. Some questions only apply where a check fired (for example, the agent asked a question).
+  const isReq = (f, v, ck) => f.required || Object.entries(f.required_if || {}).some(([k, want]) => v[k] === want) || !!(f.required_if_check && (ck || {})[f.required_if_check]);
+  const shown = (f, ck) => !f.show_if_check || !!(ck || {})[f.show_if_check];
+  function fieldsOk(fields, v, ck) {
     if (!v) return false;
     return fields.every((f) => {
       const x = v[f.id];
-      if (isReq(f, v) && isEmpty(x)) return false;
+      if (isReq(f, v, ck) && isEmpty(x)) return false;
       if (x && f.min_chars && String(x).trim().length < f.min_chars) return false;
       if (f.type === 'checklist' && isReq(f, v) && !checklistDone(f, x)) return false;
       return true;
@@ -138,7 +140,7 @@
   const checklistDone = (f, x) => f.items.every((it) => { const a = (x || {})[it.id] || {}; return a.answer === 'No' || (a.answer === 'Yes' && a.step); });
   function stepState(s) {
     if (!s.labelable) return 'none';
-    const a = fieldsOk(part('steps').fields, S.labels[key('steps', s.id)]);
+    const a = fieldsOk(part('steps').fields, S.labels[key('steps', s.id)], s.checks);
     const b = fieldsOk(part('prompts').fields, S.labels[key('prompts', s.id)]);
     if (a && b) return 'done';
     return (S.labels[key('steps', s.id)] || S.labels[key('prompts', s.id)]) ? 'partial' : 'todo';
@@ -376,6 +378,7 @@
       best ? el('a', { href: stepHash(s, 'checks') }, best.kind === 'tests' ? `Tests ${best.passed}/${best.passed + best.failed}` : `${best.label[0].toUpperCase() + best.label.slice(1)} ${best.text}`, best.source === 'claimed' ? el('span', { class: 'claim' }, ' (claimed)') : null) : null,
       st.errors ? el('a', { href: stepHash(s, 'timeline'), class: 'bad' }, plural(st.errors, 'error')) : null,
       st.interrupts ? el('span', { class: 'bad' }, 'Interrupted') : null,
+      ...checkFacts(s),
     ].filter(Boolean);
     pane.append(el('div', { class: 'facts' }, facts));
 
@@ -391,7 +394,7 @@
     if (tab === 'overview') body.append(stepOverview(s, toolActs));
     if (tab === 'changes') append(body, [diffs.length ? diffs.map((d, i) => diffCard(d, i, diffs.length)) : el('p', { class: 'empty' },
       'No files were changed in this step.')]);
-    if (tab === 'checks') body.append(checksView(checks, claims));
+    if (tab === 'checks') { const c = claimsBox(s); if (c) body.append(c); body.append(checksView(checks, claims)); }
     if (tab === 'timeline') body.append(timeline(s.actions));
     pane.append(body);
 
@@ -552,6 +555,26 @@
       body, more, d.more ? el('div', { class: 'diff-more muted small' }, `${d.more} more lines were cut by the pipeline.`) : null);
   }
 
+  // ---------- automatic checks from the pipeline (pointers, not answers) ----------
+  function checkFacts(s) {
+    const ck = s.checks || {};
+    const out = [];
+    if (ck.asked) out.push(el('span', { class: 'flag' }, ck.asked > 1 ? `Asked the human ${ck.asked} questions` : 'Asked the human a question'));
+    if ((ck.claims || []).length) out.push(el('a', { href: stepHash(s, 'checks'), class: 'flag warn' }, plural(ck.claims.length, 'reported number') + ' to check'));
+    if ((ck.test_edits || []).length) out.push(el('a', { href: stepHash(s, 'changes'), class: 'flag', title: ck.test_edits.map(relPath).join(', ') }, 'Edited test or grader files'));
+    if ((ck.answer_edits || []).length) out.push(el('a', { href: stepHash(s, 'changes'), class: 'flag warn', title: ck.answer_edits.map(relPath).join(', ') }, 'Wrote an answer file directly'));
+    if (ck.lines_added >= 10) out.push(el('span', { title: 'Share of the lines the agent added in this step that are still in the final repo' }, `${Math.round(100 * ck.lines_kept / ck.lines_added)}% of its lines kept`));
+    return out;
+  }
+  function claimsBox(s) {
+    const cl = (s.checks || {}).claims || [];
+    if (!cl.length) return null;
+    return el('section', { class: 'card claimsbox' }, el('h3', {}, 'Numbers to check'),
+      el('p', { class: 'small muted' }, 'The agent reported these at the end of the step, but no run measured before it shows the same number. It may be a target, a typo, or a claim it never checked.'),
+      el('ul', { class: 'cmdlist' }, cl.map((c) => el('li', {}, el('span', { class: 'dot warn', 'aria-hidden': 'true' }),
+        el('span', { class: 'cmdtext' }, el('b', {}, c.claim), el('span', { class: 'small muted' }, c.last_measured ? `Last measured: ${c.last_measured}` : 'Nothing like it was measured before this point.'))))));
+  }
+
   function checksView(checks, claims) {
     const box = el('div', {});
     if (!checks.length && !claims.length) return el('div', { class: 'empty card' }, 'No tests, evaluations or score claims in this step.');
@@ -598,7 +621,8 @@
   // ---------- labelling guide (text lives in label_schema.json -> guide) ----------
   const GUIDE_FOR = { effect: 'effect', human_corrected: 'corrections', reverted: 'corrections', intent: 'intent', source: 'source',
                       steering_quality: 'session', agent_quality: 'session', training_value: 'session', type: 'session',
-                      behaviours: 'session', involvement: 'session', confidence: 'session', noticed: 'session' };
+                      behaviours: 'session', involvement: 'session', confidence: 'session', noticed: 'session',
+                      reaction: 'intent', asked_needed: 'corrections', should_have_asked: 'corrections', claims_match: 'session', earned: 'session' };
   let guideReturn = null;
   function closeGuide() {
     const d = $('guide'); if (!d) return;
@@ -659,6 +683,7 @@
     const pv = { ...(S.labels[key('prompts', s.id)] || {}) };
     if (!(pv.intent || []).length) { pv.intent = [kind === 'slash' ? 'Not a real prompt' : 'Go ahead or continue']; filled.push('what the prompt asks for'); }
     if (!pv.source) { pv.source = 'Typed by the human'; filled.push('who wrote it'); }
+    if (!pv.reaction && kind === 'goahead') { pv.reaction = 'Goes ahead or approves'; filled.push('how it reacts'); }
     if (filled.length) save('prompts', s.id, pv);
     const sv = { ...(S.labels[key('steps', s.id)] || {}) };
     if (!sv.effect && quietStep(s)) { sv.effect = 'Neutral'; save('steps', s.id, sv); filled.push('Neutral, because the agent did almost nothing'); }
@@ -741,8 +766,10 @@
       box.replaceWith(fresh);
       if (focusId) { const f = fresh.querySelector(`[data-fid="${focusId}"]`); if (f) f.focus(); }
     };
+    const step = S.steps.find((x) => x.id === target), ck = step && step.checks;
     for (const f of p.fields) {
-      box.append(field(f, v, (x, opts = {}) => { v[f.id] = x; save(pid, target, { ...v }); if (!opts.quiet) redraw(opts.focus); }, `${pid}-${target}-${f.id}`));
+      if (!shown(f, ck)) continue;
+      box.append(field(f, v, (x, opts = {}) => { v[f.id] = x; save(pid, target, { ...v }); if (!opts.quiet) redraw(opts.focus); }, `${pid}-${target}-${f.id}`, ck));
       if (pid === 'steps' && f.id === 'reverted') {
         const s = S.steps.find((x) => x.id === target);
         const h = s && laterChanges(s);
@@ -752,9 +779,9 @@
     return box;
   }
 
-  function field(f, v, set, fid) {
+  function field(f, v, set, fid, ck) {
     const value = v[f.id], dis = READONLY;
-    const req = isReq(f, v);
+    const req = isReq(f, v, ck);
     const wrap = el('div', { class: 'field' });
     const q = el('span', { class: 'q', id: fid + '-q' }, f.label.replace(/ \(required if Hurt\)/, ''), req ? el('span', { class: 'req', 'aria-hidden': 'true' }, '*') : null,
       GUIDE_FOR[f.id] && f.type !== 'bool' ? guideLink(GUIDE_FOR[f.id]) : null);
@@ -830,7 +857,8 @@
       if (section === 'summary') node = await finalSummary();
       else if (section === 'scores') node = finalScores();
       else if (section === 'repo') node = finalRepo(await data('code'), arg);
-      else if (section === 'answers') node = finalAnswers(await data('output'));
+      else if (section === 'answers') node = outcomeOpen() ? finalAnswers(await data('output'))
+        : el('div', { class: 'pane-narrow' }, el('h1', {}, 'Answers (output.csv)'), el('div', { class: 'note info', style: { marginTop: '14px' } }, el('span', {}, 'The answers and how they compare with other builds appear after you finish the session grade on the Wrap up page. Judging the work first keeps the result from swaying you.')));
       else if (section === 'briefing') node = el('div', { class: 'pane-narrow' }, el('h1', {}, 'AI briefing'), el('div', { class: 'note warn', style: { margin: '10px 0 14px' } }, 'An AI wrote this from the repo for the judges. It can be wrong. Check claims against the code and the trace.'), renderValue(await data('context'), 0));
       else node = el('div', { class: 'pane-narrow md' }, renderMarkdown((await data('brief')) || 'No task brief was uploaded.'));
     } catch (e) { node = el('div', { class: 'note warn' }, 'Could not load this section: ' + e.message); }
@@ -848,7 +876,9 @@
       tile('Tool calls', (st.tool_calls || 0).toLocaleString(), `${st.tool_errors || 0} failed, ${st.test_runs || 0} test runs`),
       tile('Time span', span ? fmtDur(span) : 'Not available', first ? `${fmtTime(first)} to ${fmtTime(last)}` : ''),
       tile('Repo files', st.code_files, `${st.files_touched} changed during the session`),
-      sm ? tile('Answers', sm.rows, `${sm.status_matches_majority} match the batch majority on status`) : null));
+      sm && outcomeOpen() ? tile('Answers', sm.rows, `${sm.status_matches_majority} match the batch majority on status`) : null,
+      (b.checks || {}).agent_lines_added ? tile('Agent code kept', `${Math.round(100 * b.checks.agent_lines_kept / b.checks.agent_lines_added)}%`, `of ${b.checks.agent_lines_added.toLocaleString()} lines it added are in the final repo`) : null,
+      (b.checks || {}).final_code_lines ? tile('Code not from agent edits', `${Math.round(100 * b.checks.final_code_lines_untraced / b.checks.final_code_lines)}%`, 'written by the human, by shell commands, or before the session') : null));
     const models = Object.entries(b.models || {});
     box.append(el('section', { class: 'card', style: { marginTop: '14px' } }, el('h3', { style: { marginBottom: '8px' } }, 'Tools and models'),
       el('dl', { class: 'kv' }, el('dt', {}, 'Coding tools in the trace'), el('dd', {}, (b.trace_tools || []).join(', ') || 'Not available'),
@@ -1056,7 +1086,38 @@
   function wrapPart(pid) {
     const box = el('div', {});
     const v = { ...(S.labels[key(pid, '')] || {}) };
-    for (const f of part(pid).fields) box.append(field(f, v, (x, opts = {}) => { v[f.id] = x; save(pid, '', { ...v }); if (!opts.quiet) { const fresh = wrapPart(pid); box.replaceWith(fresh); const t = opts.focus && fresh.querySelector(`[data-fid="${opts.focus}"]`); if (t) t.focus(); } }, `${pid}--${f.id}`));
+    for (const f of part(pid).fields) {
+      if (f.after_outcome) {
+        if (!outcomeOpen()) {
+          box.append(el('div', { class: 'note info' }, el('span', {}, 'The result of this build, and one last question, appear here once the rest of the session grade is done. Judging the work first keeps the result from swaying you.')));
+          continue;
+        }
+        box.append(outcomeCard());
+      }
+      box.append(field(f, v, (x, opts = {}) => { v[f.id] = x; save(pid, '', { ...v }); if (!opts.quiet) { const fresh = wrapPart(pid); box.replaceWith(fresh); const t = opts.focus && fresh.querySelector(`[data-fid="${opts.focus}"]`); if (t) t.focus(); } }, `${pid}--${f.id}`));
+    }
+    return box;
+  }
+  // The result (answers against the batch, claims flagged, code kept) stays hidden until the session grade is in.
+  function outcomeOpen() {
+    if (READONLY) return true;
+    const fields = part('session').fields.filter((f) => !f.after_outcome);
+    return fieldsOk(fields, S.labels[key('session', '')]);
+  }
+  function outcomeCard() {
+    const box = el('div', { class: 'card outcome' }, el('h3', {}, 'The result'), el('p', { class: 'muted small' }, 'Loading…'));
+    data('output').then((out) => {
+      const sm = (out || {}).summary || {}, c = S.build.checks || {};
+      const R = (S.build.readings || []).filter((r) => r.source === 'measured');
+      const lastTests = R.filter((r) => r.kind === 'tests').pop(), lastScore = R.filter((r) => r.kind === 'score').pop();
+      clear(box).append(el('h3', {}, 'The result'), el('ul', { class: 'cmdlist' },
+        sm.rows ? el('li', {}, el('span', { class: 'dot' }), el('span', {}, `Answers: ${sm.status_matches_majority} of ${sm.rows} match most other builds on status, ${sm.plan_matches_majority} on the deletion plan`)) : null,
+        lastTests ? el('li', {}, el('span', { class: 'dot ' + (lastTests.failed ? 'bad' : '') }), el('span', {}, `Last measured tests: ${lastTests.passed} passed, ${lastTests.failed} failed`)) : null,
+        lastScore ? el('li', {}, el('span', { class: 'dot' }), el('span', {}, `Last measured score: ${lastScore.label} ${lastScore.text}`)) : null,
+        c.claims_flagged ? el('li', {}, el('span', { class: 'dot warn' }), el('span', {}, `${plural(c.claims_flagged, 'reported number')} with no matching measured run`)) : null,
+        c.agent_lines_added ? el('li', {}, el('span', { class: 'dot' }), el('span', {}, `${Math.round(100 * c.agent_lines_kept / c.agent_lines_added)}% of the code the agent added is in the final repo`)) : null),
+        el('p', { class: 'small muted' }, 'Most other builds is a comparison with this batch, not the official answer key.'));
+    }).catch(() => clear(box).append(el('h3', {}, 'The result'), el('p', { class: 'muted small' }, 'Could not load the result.')));
     return box;
   }
   function failuresForm() {
@@ -1080,6 +1141,17 @@
               v.items.push({ step_id: s.id, description: note }); v.none = false; commit(true);
             } }, 'Add as a failure'));
         }))));
+    }
+    const flagged = labelable().flatMap((s) => ((s.checks || {}).claims || []).map((c) => ({ s, c })));
+    if (flagged.length) {
+      box.append(el('div', { class: 'suggest' },
+        el('div', { class: 'who-label' }, `Numbers the agent reported that no run backs up (${flagged.length})`),
+        el('p', { class: 'small muted' }, 'Check these before you answer "Did the claims match?". Add one as a failure only if it misled the human.'),
+        el('ul', { class: 'cmdlist' }, flagged.slice(0, 20).map(({ s, c }) => el('li', {}, el('span', { class: 'dot warn', 'aria-hidden': 'true' }),
+          el('span', { class: 'cmdtext' }, el('a', { href: stepHash(s, 'checks'), class: 'small' }, `Step ${s.n}`), el('span', { class: 'small' }, `${c.claim}${c.last_measured ? ', last measured ' + c.last_measured : ''}`)),
+          READONLY ? null : listed.has(s.id) ? el('span', { class: 'badge ok' }, 'Added') : el('button', { class: 'sm', onclick: () => {
+            v.items.push({ step_id: s.id, type: 'Claimed a result it did not get', description: `Reported ${c.claim}; ${c.last_measured ? 'the last measured run said ' + c.last_measured : 'no run measured it'}.` }); v.none = false; commit(true);
+          } }, 'Add as a failure'))))));
     }
     v.items.forEach((it, i) => {
       const card = el('div', { class: 'card', style: { background: 'var(--raised)' } }, el('div', { class: 'card-head' }, el('b', {}, `Failure ${i + 1}`), el('span', { class: 'spacer' }),

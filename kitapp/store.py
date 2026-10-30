@@ -153,6 +153,9 @@ class Store:
     def labelable_ids(self, bid):
         return [s['id'] for s in self.bundle(bid, 'steps') if s.get('labelable')]
 
+    def step_checks(self, bid):
+        return {s['id']: s.get('checks') or {} for s in self.bundle(bid, 'steps') if s.get('labelable')}
+
     def fingerprint(self, bid):
         """Fingerprint of a task's data, so answers can be matched to the exact version they were made on."""
         h = hashlib.sha256()
@@ -291,7 +294,7 @@ class Store:
 
     def progress(self, app_id, bid):
         rec = self.load(app_id, bid, repair=False) or {}
-        prog, complete = L.progress(to_map(rec.get('answers') or {}), self.labelable_ids(bid))
+        prog, complete = L.progress(to_map(rec.get('answers') or {}), self.labelable_ids(bid), self.step_checks(bid))
         done = sum(d for d, _ in prog.values())
         total = sum(t for _, t in prog.values()) or 1
         return {'prog': prog, 'complete': complete, 'pct': round(100 * done / total),

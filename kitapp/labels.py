@@ -77,10 +77,12 @@ def clean_value(pid, value, step_ids):
     return {f['id']: _clean_field(f, value.get(f['id']), step_ids) for f in p['fields']}
 
 
-def _fields_ok(fields, v):
+def _fields_ok(fields, v, checks=None):
+    """checks: the step's automatic checks, for questions that only apply to some steps (show_if_check)."""
     for f in fields:
         x = v.get(f['id'])
-        req = f.get('required') or any(v.get(k) == want for k, want in (f.get('required_if') or {}).items())
+        req = f.get('required') or any(v.get(k) == want for k, want in (f.get('required_if') or {}).items()) \
+            or bool(f.get('required_if_check') and (checks or {}).get(f['required_if_check']))
         if req and x in (None, '', []):
             return False
         if x and f.get('min_chars') and len(str(x).strip()) < f['min_chars']:
@@ -99,14 +101,15 @@ def checklist_done(f, v):
                ((v.get(it['id']) or {}).get('answer') == 'Yes' and (v.get(it['id']) or {}).get('step')) for it in f['items'])
 
 
-def progress(labels, labelable_ids):
-    """labels: {(part, target): value}. Returns per-part (done, total) and overall completeness."""
+def progress(labels, labelable_ids, checks=None):
+    """labels: {(part, target): value}; checks: {step id: automatic checks}. Returns per-part (done, total) and overall completeness."""
+    checks = checks or {}
     out = {}
     s = labels.get(('session', ''))
     out['session'] = (1 if s and _fields_ok(part('session')['fields'], s) else 0, 1)
     for pid in ('steps', 'prompts'):
         fields = part(pid)['fields']
-        done = sum(1 for sid in labelable_ids if labels.get((pid, sid)) and _fields_ok(fields, labels[(pid, sid)]))
+        done = sum(1 for sid in labelable_ids if labels.get((pid, sid)) and _fields_ok(fields, labels[(pid, sid)], checks.get(sid)))
         out[pid] = (done, len(labelable_ids))
     fl = labels.get(('failures', ''))
     ok = bool(fl) and (fl.get('none') or (fl.get('items') and all(_fields_ok(part('failures')['fields'], it) for it in fl['items'])))
@@ -150,12 +153,15 @@ def consensus(per_annotator, labelable_ids):
     res['summary_behaviour_agreement'] = (round(sum(r['agreement'] for r in res['behaviours'] if r['agreement'] is not None) /
                                            max(1, sum(1 for r in res['behaviours'] if r['agreement'] is not None)), 2)
                                           if res['behaviours'] else None)
-    step_rows, eff_shares, intent_j, src_shares = [], [], [], []
+    step_rows, eff_shares, intent_j, src_shares, react_shares = [], [], [], [], []
     for sid in labelable_ids:
         eff = [per_annotator[n].get(('steps', sid), {}).get('effect') for n in names]
         intents = [per_annotator[n].get(('prompts', sid), {}).get('intent') for n in names]
         src = [per_annotator[n].get(('prompts', sid), {}).get('source') for n in names]
-        es, ss = _modal_share(eff), _modal_share(src)
+        react = [per_annotator[n].get(('prompts', sid), {}).get('reaction') for n in names]
+        es, ss, rs = _modal_share(eff), _modal_share(src), _modal_share(react)
+        if rs is not None:
+            react_shares.append(rs)
         jj = sum(_jaccard(a, b) for a, b in itertools.combinations(intents, 2)) / max(1, len(names) * (len(names) - 1) // 2)
         if es is not None:
             eff_shares.append(es)
@@ -166,7 +172,8 @@ def consensus(per_annotator, labelable_ids):
     avg = lambda xs: round(sum(xs) / len(xs), 2) if xs else None
     res['steps'] = step_rows
     res['summary'] = {'step_effect_agreement': avg(eff_shares), 'steps_all_agree': sum(1 for x in eff_shares if x == 1.0),
-                      'prompt_intent_overlap': avg(intent_j), 'prompt_source_agreement': avg(src_shares)}
+                      'prompt_intent_overlap': avg(intent_j), 'prompt_source_agreement': avg(src_shares),
+                      'prompt_reaction_agreement': avg(react_shares)}
     res['failures'] = {n: collections.Counter(it.get('type') for it in (per_annotator[n].get(('failures', ''), {}) or {}).get('items', []))
                        for n in names}
     res['missed'] = {n: sum(1 for it in (per_annotator[n].get(('failures', ''), {}) or {}).get('items', []) if (it.get('noticed') or '').startswith('No'))

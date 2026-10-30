@@ -54,11 +54,12 @@ def finish_all(c, bid, steering=4):
     check = {b: {'answer': 'No'} for b in BEHAVIOURS}
     check['clarified_goal'] = {'answer': 'Yes', 'step': 'S1.1'}
     assert put('session', '', {'steering_quality': steering, 'agent_quality': 3, 'behaviours': check, 'involvement': 'They shared the work equally',
-                               'training_value': 'No', 'confidence': 'High',
+                               'training_value': 'No', 'confidence': 'High', 'claims_match': 'Mostly',
+                               'earned': 'Partly: some luck, shortcuts or gaming',
                                'rationale': 'The human gave a clear brief and checked each result before moving on to the next part.'}).status_code == 200
     for sid in ('S1.1', 'S1.2'):
         assert put('steps', sid, {'effect': 'Helped'}).status_code == 200
-        assert put('prompts', sid, {'intent': ['Build a feature'], 'source': 'Typed by the human'}).status_code == 200
+        assert put('prompts', sid, {'intent': ['Build a feature'], 'source': 'Typed by the human', 'reaction': 'Corrects the agent'}).status_code == 200
     r = put('failures', '', {'none': True, 'items': []})
     assert r.json()['complete'] is True
     assert c.post(f'/api/t/{bid}/submit', headers=h).status_code == 200
@@ -142,7 +143,7 @@ def test_damaged_file_is_restored_from_backup():
     path = f'{root}/annotations/A100/b001.json'
     open(path, 'w').write('{"half written')  # what a crash in the middle of a write would leave without atomic saves
     labels = c.get('/api/t/b001/labels').json()['labels']
-    assert {'part': 'steps', 'target': 'S1.1', 'value': {'effect': 'Helped', 'human_corrected': None, 'reverted': None, 'note': None}} in labels
+    assert next(x for x in labels if x['part'] == 'steps' and x['target'] == 'S1.1')['value']['effect'] == 'Helped'  # the backup's answer
     assert any(f.startswith('b001.json.broken-') for f in os.listdir(os.path.dirname(path)))
     assert 'restored from its last good copy' in c.get('/tasks').text
 

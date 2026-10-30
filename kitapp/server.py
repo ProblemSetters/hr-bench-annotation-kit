@@ -169,7 +169,7 @@ def api_brief():
 
 def labels_payload(rec, bid):
     lm = R.to_map(rec.get('answers') or {})
-    prog, complete = L.progress(lm, store.labelable_ids(bid))
+    prog, complete = L.progress(lm, store.labelable_ids(bid), store.step_checks(bid))
     status = {'finished': 'submitted', 'in_progress': 'in_progress'}.get(rec.get('status'), 'assigned')
     return {'status': status, 'labels': [{'part': p, 'target': t, 'value': v} for (p, t), v in lm.items()],
             'progress': prog, 'complete': complete}

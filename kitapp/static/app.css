@@ -104,6 +104,13 @@ label { cursor: pointer; }
 .seg button[aria-pressed="true"] { background: var(--primary); border-color: var(--primary); color: var(--on-primary); font-weight: 500; }
 .seg button[aria-pressed="true"].tone-bad { background: var(--negative); border-color: var(--negative); color: var(--on-negative); }
 .seg .key { display: none; }
+/* automatic checks from the pipeline: quiet flags on the facts line, a box on the Tests tab, the result card */
+.facts .flag { color: var(--text); }
+.facts .flag.warn, .facts a.flag.warn { color: var(--warning); }
+.dot.warn { background: var(--warning); }
+.claimsbox h3, .outcome h3 { margin-bottom: 6px; }
+.claimsbox .cmdtext, .outcome .cmdtext { display: flex; flex-direction: column; gap: 2px; }
+.card.outcome { background: var(--raised); margin-bottom: 18px; }
 /* session checklist: one row per behaviour, Yes/No on the right, step picker under a Yes */
 .checkq { list-style: none; margin: 4px 0 6px; padding: 0; }
 .checkq li { display: grid; grid-template-columns: minmax(0, 1fr) 132px; gap: 8px 14px; align-items: center; padding: 9px 0; border-top: 1px solid var(--rule); }

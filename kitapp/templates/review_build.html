@@ -29,7 +29,7 @@
   {% set sm = cons.summary %}
   <p class="muted mt-4 mb-12">Based on {{ cons.n }} finished tasks: {{ cons.annotators|join(', ') }}.</p>
   <div class="tiles">
-    {% for label, val, sub in [('Step effect agreement', sm.step_effect_agreement, 'share agreeing with the most common answer'), ('Prompt intent overlap', sm.prompt_intent_overlap, 'average overlap of intent picks'), ('Prompt source agreement', sm.prompt_source_agreement, 'share agreeing on who wrote the prompt')] %}
+    {% for label, val, sub in [('Step effect agreement', sm.step_effect_agreement, 'share agreeing with the most common answer'), ('Prompt intent overlap', sm.prompt_intent_overlap, 'average overlap of intent picks'), ('Prompt source agreement', sm.prompt_source_agreement, 'share agreeing on who wrote the prompt'), ('Prompt reaction agreement', sm.prompt_reaction_agreement, 'share agreeing on how the prompt reacts')] %}
     <div class="tile"><div class="label">{{ label }}</div><div class="value">{{ ((val or 0) * 100)|round|int }}%</div><div class="sub">{{ sub }}</div></div>
     {% endfor %}
     {% if cons.summary_behaviour_agreement is not none %}<div class="tile"><div class="label">Behaviour checklist agreement</div><div class="value">{{ (cons.summary_behaviour_agreement * 100)|round|int }}%</div><div class="sub">share agreeing on each Yes or No</div></div>{% endif %}
