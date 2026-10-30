@@ -1,0 +1,8 @@
+.venv
+.git
+tasks
+annotations
+exports
+tests
+**/__pycache__
+*.zip

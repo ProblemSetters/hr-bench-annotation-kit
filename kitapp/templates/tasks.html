@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}My tasks | HackerRank Bench annotate{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>My tasks</h1><div class="sub">Each task is one build. Label its steps, then grade the session and mark it as finished. Your work saves on this computer as you go.</div></div></div>
+{% for n in notices %}<div class="note warn flash" role="status">{{ n }}</div>{% endfor %}
+{% for n in broken %}<div class="note warn flash" role="alert">{{ n }}</div>{% endfor %}
+{% if saved %}<div class="note flash" role="status">Your details are saved.</div>{% endif %}
+{% if not rows %}
+<div class="card empty"><h2>No tasks yet</h2><p>Unzip the tasks file we sent you into the <code>tasks</code> folder of this kit, then reload this page.</p></div>
+{% else %}
+<div class="table-wrap"><table>
+<thead><tr><th>Build</th><th>Coding tool</th><th class="num">Steps</th><th>Your progress</th><th class="num">Time</th><th>Status</th><th></th></tr></thead>
+<tbody>
+{% for r in rows %}{% set p = r.prog %}
+<tr>
+  <td><b>{{ r.bid }}</b></td>
+  <td class="small">{{ r.info.trace_tools|join(' and ') }}</td>
+  <td class="num">{{ r.info.steps }}</td>
+  <td><div class="progress-cell"><progress max="{{ p.steps[1] * 2 + 2 }}" value="{{ p.steps[0] + p.prompts[0] + p.session[0] + p.failures[0] }}" class="{{ 'done' if r.complete }}"></progress><span class="small num">{{ p.steps[0] }}/{{ p.steps[1] }} steps</span></div></td>
+  <td class="small num">{{ r.secs|dur }}</td>
+  <td><span class="status {{ status_class[r.status] }}">{{ status_word[r.status] }}</span></td>
+  <td class="num"><a class="btn {{ '' if r.status == 'finished' else 'primary' }} sm" href="/label/{{ r.bid }}">{{ 'View' if r.status == 'finished' else 'Continue' if r.status == 'in_progress' else 'Start' }}</a></td>
+</tr>
+{% endfor %}
+</tbody></table></div>
+
+{% set fin = rows|selectattr('status', 'equalto', 'finished')|list|length %}
+<section class="card section">
+  <div class="card-head">
+    <div>
+      <h2>Send your work</h2>
+      <p class="small muted mt-4">{{ fin }} of {{ rows|length }} tasks finished.
+        {% if fin < rows|length %}You can export at any time and export again later; the newest file replaces the old one.{% else %}Everything is finished. Export and send the file.{% endif %}</p>
+    </div>
+    <span class="spacer"></span>
+    <form method="post" action="/export" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="{{ 'primary' if fin == rows|length else '' }}">Export my work</button></form>
+  </div>
+  {% if last_export %}
+  <div class="{{ 'note' if exported else 'export-line' }} mt-10" role="status"><span>
+    {% if exported %}Exported. {% endif %}Your file is <code>exports/{{ export_name }}</code>, saved {{ last_export|ts }}.
+    <a href="/exports/{{ export_name }}" download>Download it</a>, then send it the way the email asked.
+  </span></div>
+  {% endif %}
+</section>
+{% endif %}
+{% endblock %}

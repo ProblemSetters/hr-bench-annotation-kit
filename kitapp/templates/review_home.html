@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Overview | HackerRank Bench annotate{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Review</h1><div class="sub">Everything here is read from <code>tasks/</code> and <code>annotations/</code>. Nothing can be changed in review mode.</div></div>
+  <div class="actions"><a class="btn" href="/review/export.jsonl" download>Download finished labels (JSONL)</a></div>
+</div>
+<div class="tiles">
+  <div class="tile"><div class="label">Annotators</div><div class="value">{{ stats.people }}</div><div class="sub">folders in annotations/</div></div>
+  <div class="tile"><div class="label">Builds</div><div class="value">{{ stats.builds }}</div><div class="sub"><a href="/review/builds">See all builds</a></div></div>
+  <div class="tile"><div class="label">Tasks finished</div><div class="value">{{ stats.finished }}</div><div class="sub">of {{ stats.tasks }} started</div></div>
+  <div class="tile"><div class="label">Builds with 2 or more finished</div><div class="value">{{ stats.covered }}</div><div class="sub">enough to compare</div></div>
+  <div class="tile"><div class="label">File problems</div><div class="value">{{ stats.problems }}</div><div class="sub">{{ 'listed below' if stats.problems else 'none found' }}</div></div>
+</div>
+
+{% if problems %}
+<section class="section">
+  <h2 class="mb-12">File problems</h2>
+  <div class="table-wrap"><table><thead><tr><th>Annotator</th><th>Problem</th></tr></thead><tbody>
+  {% for app_id, name, msg in problems %}<tr><td class="nowrap"><a href="/review/a/{{ app_id }}"><b>{{ name }}</b></a><span class="cell-sub">{{ app_id }}</span></td><td class="small">{{ msg }}</td></tr>{% endfor %}
+  </tbody></table></div>
+</section>
+{% endif %}
+
+<section class="section">
+  <h2 class="mb-12">Annotators</h2>
+  {% if not people %}
+  <div class="card empty">No annotators yet. Unzip each submission into this kit folder: its files land in <code>annotations/&lt;application id&gt;/</code>.</div>
+  {% else %}
+  <div class="table-wrap"><table>
+  <thead><tr><th>Annotator</th><th>Application id</th><th>Email</th><th>Coding experience</th><th>AI tools they use</th><th>Finished</th><th class="num">Active time</th><th></th></tr></thead>
+  <tbody>
+  {% for p in people %}{% set m = p.meta %}
+  <tr>
+    <td><div class="person"><span class="avatar" aria-hidden="true">{{ ((m.first_name or '?')[:1] ~ (m.last_name or '')[:1])|upper }}</span><b>{{ p.name }}</b></div></td>
+    <td class="small mono">{{ p.id }}</td>
+    <td class="small">{{ m.email }}</td>
+    <td class="small">{{ m.years_coding or 'Not given' }}</td>
+    <td class="small">{{ (m.ai_tools or [])|join(', ') or 'Not given' }}</td>
+    <td>{% if p.tasks %}<div class="progress-cell"><progress max="{{ p.tasks|length }}" value="{{ p.finished }}" class="{{ 'done' if p.finished == p.tasks|length }}"></progress><span class="small num">{{ p.finished }}/{{ p.tasks|length }}</span></div>{% else %}<span class="muted small">No answer files</span>{% endif %}
+      {% if p.problems %}<span class="cell-sub"><span class="badge warn">{{ p.problems|length }} {{ 'problem' if p.problems|length == 1 else 'problems' }}</span></span>{% endif %}</td>
+    <td class="small num">{{ p.secs|dur }}</td>
+    <td class="num"><a class="btn sm" href="/review/a/{{ p.id }}">Open</a></td>
+  </tr>
+  {% endfor %}
+  </tbody></table></div>
+  {% endif %}
+</section>
+
+<section class="section">
+  <h2>Calibration</h2>
+  {% if not calib %}
+  <p class="muted mt-4">No calibration builds set. List their build ids, one per line, in <code>calibration.txt</code> in the kit folder, then reload.</p>
+  {% elif not calib_rows %}
+  <p class="muted mt-4">Calibration builds: {{ calib|join(', ') }}. Results appear once at least 2 people have finished one.</p>
+  {% else %}
+  <p class="muted mt-4 mb-12">On {{ calib|join(', ') }}. Grade difference is this person's session grade minus the others' average, on the 1 to 5 scale: above 0 is more generous, below 0 is stricter.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Annotator</th><th class="num">Builds</th><th class="num">Step effect agreement</th><th class="num">Steering grade difference</th><th class="num">Agent grade difference</th></tr></thead>
+    <tbody>
+    {% for r in calib_rows %}<tr>
+      <td><a href="/review/a/{{ r.id }}"><b>{{ r.name }}</b></a></td>
+      <td class="num">{{ r.builds }}</td>
+      <td class="num">{{ ((r.agree or 0) * 100)|round|int ~ '%' if r.agree is not none else 'Not available' }}</td>
+      <td class="num">{{ '%+.1f'|format(r.steering) if r.steering is not none else 'Not available' }}</td>
+      <td class="num">{{ '%+.1f'|format(r.agent) if r.agent is not none else 'Not available' }}</td>
+    </tr>{% endfor %}
+    </tbody></table></div>
+  {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,2 @@
+HackerRank Bench brand files, copied unchanged from astra-frontend/public/brand/ (commit 51260bd, 29 Oct 2026).
+Do not edit here; update them in astra-frontend and copy again.

@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>{% block title %}{{ product }}{% endblock %}</title>
+<link rel="icon" type="image/svg+xml" href="/static/brand/hackerrank-bench-icon.svg">
+<link rel="stylesheet" href="/static/app.css?v={{ v() }}">
+</head>
+<body class="{% block bodyclass %}{% endblock %}">
+<a class="skip" href="#main">Skip to content</a>
+<header class="top">
+  <a class="brand" href="/" aria-label="{{ product }} home">
+    <picture>
+      <source srcset="/static/brand/hackerrank-bench-white.svg" media="(prefers-color-scheme: dark)">
+      <img src="/static/brand/hackerrank-bench.svg" alt="HackerRank Bench" width="80" height="34">
+    </picture>
+    <span class="product">annotate</span>
+  </a>
+  {% set path = request.url.path %}
+  {% if mode == 'review' %}
+  <nav aria-label="Main">
+    {% for href, label in [('/', 'Overview'), ('/review/builds', 'Builds')] %}
+    <a href="{{ href }}" {% if path == href or (href != '/' and path.startswith(href)) %}aria-current="page"{% endif %}>{{ label }}</a>
+    {% endfor %}
+  </nav>
+  <div class="who"><span class="badge info">Review mode, read only</span></div>
+  {% elif user %}
+  <nav aria-label="Main"><a href="/tasks" {% if path == '/tasks' %}aria-current="page"{% endif %}>My tasks</a></nav>
+  <a class="who who-link" href="/me" title="Application id {{ user.app_id }}, {{ user.email }}">
+    <span>{{ user.name }}</span>
+    <span class="avatar" aria-hidden="true">{{ (user.first_name[:1] ~ user.last_name[:1])|upper }}</span>
+  </a>
+  {% endif %}
+</header>
+<main id="main" class="{% block mainclass %}page{% endblock %}">
+{% block content %}{% endblock %}
+</main>
+{% block scripts %}{% endblock %}
+</body>
+</html>

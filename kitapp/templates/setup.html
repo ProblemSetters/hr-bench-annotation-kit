@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Your details' if editing else 'Welcome' }} | HackerRank Bench annotate{% endblock %}
+{% block content %}
+<section class="card narrow-card setup">
+  {% if editing %}
+  <a href="/tasks" class="small">Back to my tasks</a>
+  <h1 class="mt-6">Your details</h1>
+  <p class="muted mt-6 mb-16">These go with your answers when you export. Fix a typo here at any time.</p>
+  {% else %}
+  <h1>Welcome</h1>
+  <p class="muted mt-6 mb-16">Before you start, tell us who you are. You only do this once. Your answers are saved on this computer, in the <code>annotations</code> folder.</p>
+  {% endif %}
+  {% if error %}<div class="note warn flash" role="alert">{{ error }}</div>{% endif %}
+  <form method="post" action="{{ '/me' if editing else '/setup' }}" class="form-stack">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label>Application id
+      {% if locked %}
+      <input name="application_id" value="{{ f.application_id }}" readonly aria-describedby="appid-help">
+      <span class="help" id="appid-help">Locked, because you have already started labelling under this id.</span>
+      {% else %}
+      <input name="application_id" value="{{ f.application_id or '' }}" required autocomplete="off" spellcheck="false" maxlength="64" aria-describedby="appid-help" {% if not editing %}autofocus{% endif %}>
+      <span class="help" id="appid-help">From the email we sent you with your tasks.{% if expected %} It must match the id your tasks were made for.{% endif %}</span>
+      {% endif %}
+    </label>
+    <div class="form-2">
+      <label>First name<input name="first_name" value="{{ f.first_name or '' }}" required autocomplete="given-name" maxlength="100"></label>
+      <label>Last name<input name="last_name" value="{{ f.last_name or '' }}" required autocomplete="family-name" maxlength="100"></label>
+    </div>
+    <label>Email<input name="email" type="email" value="{{ f.email or '' }}" required autocomplete="email" spellcheck="false" maxlength="320"></label>
+    <fieldset class="plain">
+      <legend>Years of professional coding <span class="muted">(optional)</span></legend>
+      <div class="chips-form">
+        {% for y in years %}<label class="check"><input type="radio" name="years_coding" value="{{ y }}" {% if f.years_coding == y %}checked{% endif %}><span>{{ y }}</span></label>{% endfor %}
+      </div>
+    </fieldset>
+    <fieldset class="plain">
+      <legend>AI coding tools you use regularly <span class="muted">(optional)</span></legend>
+      <div class="chips-form">
+        {% for t in tools %}<label class="check"><input type="checkbox" name="ai_tools" value="{{ t }}" {% if t in (f.ai_tools or []) %}checked{% endif %}><span>{{ t }}</span></label>{% endfor %}
+      </div>
+    </fieldset>
+    <div><button class="primary">{{ 'Save my details' if editing else 'Start labelling' }}</button></div>
+  </form>
+</section>
+{% endblock %}

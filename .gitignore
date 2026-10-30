@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.DS_Store
+tasks/*
+!tasks/.gitkeep
+annotations/*
+!annotations/.gitkeep
+exports/*
+!exports/.gitkeep
+*.zip

@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} | HackerRank Bench annotate{% endblock %}
+{% block bodyclass %}labeling{% endblock %}
+{% block mainclass %}lab{% endblock %}
+{% block content %}
+<div id="app" data-api="{{ api }}" data-csrf="{{ csrf }}" data-readonly="{{ 'true' if readonly else 'false' }}" data-viewer="{{ 'admin' if user.role == 'admin' else 'annotator' }}" data-kit="{{ 'true' if kit else 'false' }}" data-title="{{ title }}" data-back="{{ '/admin/assignments' if user.role == 'admin' else '/tasks' }}">
+  <div class="taskbar">
+    <div class="title"><b id="t-title">{{ title }}</b><span class="meta" id="t-meta">Loading…</span></div>
+    <nav class="modes" aria-label="Task sections" id="modes"></nav>
+    <div class="taskprog">
+      <div><div class="small num" id="t-prog"></div><div class="bar" aria-hidden="true"><span id="t-bar"></span></div></div>
+      <span class="savestate" id="savestate" aria-live="polite"></span>
+    </div>
+  </div>
+  <div id="mode" class="workspace"></div>
+</div>
+{% endblock %}
+{% block scripts %}<script src="/static/label.js?v={{ v() }}"></script>{% endblock %}

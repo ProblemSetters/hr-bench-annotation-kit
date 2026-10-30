@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Build {{ bid }} | HackerRank Bench annotate{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><a href="/review/builds" class="small">Back to builds</a><h1 class="mt-6">Build {{ bid }}{% if calib %} <span class="badge info">Calibration</span>{% endif %}</h1>
+    <div class="sub">{{ info.trace_tools|join(' and ') }}, {{ info.steps }} steps to label</div></div>
+</div>
+<section>
+  <h2 class="mb-12">Labelled by</h2>
+  <div class="table-wrap"><table>
+  <thead><tr><th>Annotator</th><th>Application id</th><th>Status</th><th>Progress</th><th class="num">Active time</th><th>Finished</th><th></th></tr></thead>
+  <tbody>
+  {% for p, t in rows %}<tr><td><a href="/review/a/{{ p.id }}"><b>{{ p.name }}</b></a><span class="cell-sub">{{ p.meta.email }}</span></td>
+    <td class="small mono">{{ p.id }}</td>
+    <td><span class="status {{ status_class[t.status] }}">{{ status_word[t.status] }}</span></td>
+    <td><div class="progress-cell"><progress max="100" value="{{ t.pct }}" class="{{ 'done' if t.complete }}"></progress><span class="small num">{{ t.parts }}/4 parts</span></div></td>
+    <td class="small num">{{ t.secs|dur }}</td>
+    <td class="small">{{ t.rec.finished_at|when }}</td>
+    <td class="num"><a class="btn sm" href="/review/view/{{ p.id }}/{{ bid }}">View labels</a></td></tr>
+  {% else %}<tr><td colspan="7" class="empty">No answer files for this build yet.</td></tr>{% endfor %}
+  </tbody></table></div>
+</section>
+
+<section class="section">
+  <h2>Consensus</h2>
+  {% if cons.n < 2 %}
+  <div class="card empty mt-10">Agreement appears here once at least 2 people have finished this build. {{ cons.n }} so far.</div>
+  {% else %}
+  {% set sm = cons.summary %}
+  <p class="muted mt-4 mb-12">Based on {{ cons.n }} finished tasks: {{ cons.annotators|join(', ') }}.</p>
+  <div class="tiles">
+    {% for label, val, sub in [('Step effect agreement', sm.step_effect_agreement, 'share agreeing with the most common answer'), ('Prompt intent overlap', sm.prompt_intent_overlap, 'average overlap of intent picks'), ('Prompt source agreement', sm.prompt_source_agreement, 'share agreeing on who wrote the prompt')] %}
+    <div class="tile"><div class="label">{{ label }}</div><div class="value">{{ ((val or 0) * 100)|round|int }}%</div><div class="sub">{{ sub }}</div></div>
+    {% endfor %}
+    {% if cons.summary_behaviour_agreement is not none %}<div class="tile"><div class="label">Behaviour checklist agreement</div><div class="value">{{ (cons.summary_behaviour_agreement * 100)|round|int }}%</div><div class="sub">share agreeing on each Yes or No</div></div>{% endif %}
+    <div class="tile"><div class="label">Steps everyone agrees on</div><div class="value">{{ sm.steps_all_agree }}</div><div class="sub">of {{ cons.steps|length }} steps</div></div>
+  </div>
+
+  <div class="grid-2 section">
+    <section>
+      <h3 class="mb-8">Session grade</h3>
+      <div class="table-wrap"><table>
+      <thead><tr><th>Question</th>{% for n in cons.annotators %}<th>{{ n }}</th>{% endfor %}</tr></thead>
+      <tbody>{% for k, v in cons.session.items() %}<tr><td class="small">{{ k.replace('_', ' ')|capitalize }}</td>{% for x in v['values'] %}<td class="small num">{{ x if x is not none else 'Not available' }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+      </table></div>
+    </section>
+    <section>
+      <h3 class="mb-8">Agreement between pairs (step effect)</h3>
+      <div class="table-wrap"><table><tbody>
+      {% for k, v in cons.pairwise_effect_agreement.items() %}<tr><td class="small">{{ k }}</td><td><span class="agree"><progress max="100" value="{{ ((v or 0) * 100)|round|int }}"></progress><span class="small num">{{ ((v or 0) * 100)|round|int }}%</span></span></td></tr>{% endfor %}
+      </tbody></table></div>
+      <h3 class="mt-16 mb-8">Failures reported</h3>
+      <div class="table-wrap"><table><tbody>
+      {% for n, c in cons.failures.items() %}<tr><td class="small"><b>{{ n }}</b></td><td class="small">{% for t, k in c.items() %}{{ t }} ({{ k }}){{ ', ' if not loop.last }}{% else %}<span class="muted">None</span>{% endfor %}{% if cons.missed[n] %}<span class="cell-sub">{{ cons.missed[n] }} missed by the human</span>{% endif %}</td></tr>{% endfor %}
+      </tbody></table></div>
+    </section>
+  </div>
+
+  {% if cons.behaviours %}
+  <section class="section">
+    <h3 class="mb-8">What the human did</h3>
+    <div class="table-wrap"><table>
+    <thead><tr><th>Behaviour</th>{% for n in cons.annotators %}<th>{{ n }}</th>{% endfor %}</tr></thead>
+    <tbody>{% for r in cons.behaviours %}<tr><td class="small">{{ r.label }}</td>{% for x in r['values'] %}<td><span class="badge {{ 'ok' if x == 'Yes' else '' }}">{{ x or 'Not answered' }}</span></td>{% endfor %}</tr>{% endfor %}</tbody>
+    </table></div>
+  </section>
+  {% endif %}
+
+  <section class="section">
+    <h3 class="mb-8">Steps where people disagree</h3>
+    <div class="table-wrap"><table>
+    <thead><tr><th>Step</th>{% for n in cons.annotators %}<th>{{ n }}</th>{% endfor %}<th>Intent overlap</th></tr></thead>
+    <tbody>
+    {% for r in cons.steps if r.effect_agreement is not none and r.effect_agreement < 1 %}
+    <tr><td><b>Step {{ step_no[r.step] }}</b></td>
+      {% for e in r.effect %}<td><a href="/review/view/{{ view_ids[loop.index0] }}/{{ bid }}#/steps/{{ r.step }}"><span class="badge {{ 'ok' if e == 'Helped' else 'bad' if e == 'Hurt' else '' }}">{{ e or 'Not available' }}</span></a></td>{% endfor %}
+      <td class="small num">{{ (r.intent_overlap * 100)|round|int }}%</td></tr>
+    {% else %}<tr><td colspan="9" class="empty">Everyone agrees on every step.</td></tr>{% endfor %}
+    </tbody></table></div>
+  </section>
+  {% endif %}
+</section>
+{% endblock %}

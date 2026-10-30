@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Builds | HackerRank Bench annotate{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Builds</h1><div class="sub">Every build in <code>tasks/</code>, with how many people have labelled it. Open one to compare their answers.</div></div></div>
+<div class="table-wrap"><table>
+<thead><tr><th>Build</th><th>Coding tool</th><th class="num">Steps to label</th><th class="num">People</th><th class="num">Finished</th><th></th></tr></thead>
+<tbody>
+{% for r in rows %}
+<tr>
+  <td><b>{{ r.bid }}</b>{% if r.bid in calib %} <span class="badge info">Calibration</span>{% endif %}</td>
+  <td class="small">{{ r.info.trace_tools|join(', ') }}</td>
+  <td class="num">{{ r.info.steps }}</td><td class="num">{{ r.people }}</td><td class="num">{{ r.finished }}</td>
+  <td class="num"><a class="btn sm" href="/review/b/{{ r.bid }}">Open</a></td>
+</tr>
+{% else %}<tr><td colspan="6" class="empty">No builds in tasks/ yet. Unzip the review tasks file into it.</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

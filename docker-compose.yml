@@ -1,0 +1,15 @@
+# Start:  docker compose up        Stop:  Ctrl+C, or docker compose down
+# Review mode (HackerRank team):  KIT_MODE=review docker compose up
+services:
+  kit:
+    build: .
+    image: hr-bench-annotation-kit
+    command: ["python", "-m", "kitapp", "${KIT_MODE:-annotate}"]
+    ports:
+      - "127.0.0.1:${KIT_PORT:-8790}:8790"   # reachable from this computer only
+    volumes:
+      - ./tasks:/kit/tasks
+      - ./annotations:/kit/annotations
+      - ./exports:/kit/exports
+    restart: unless-stopped                  # started again after a crash or a reboot of Docker
+    stop_grace_period: 10s

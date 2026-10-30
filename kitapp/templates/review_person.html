@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}{{ p.name }} | HackerRank Bench annotate{% endblock %}
+{% block content %}
+{% set m = p.meta %}
+<div class="page-head">
+  <div><a href="/" class="small">Back to overview</a>
+    <div class="person mt-6"><span class="avatar lg" aria-hidden="true">{{ ((m.first_name or '?')[:1] ~ (m.last_name or '')[:1])|upper }}</span><h1>{{ p.name }}</h1></div></div>
+</div>
+<section class="card">
+  <h2 class="mb-12">Annotator details</h2>
+  <dl class="kv">
+    <dt>Application id</dt><dd class="mono">{{ p.id }}</dd>
+    <dt>First name</dt><dd>{{ m.first_name }}</dd>
+    <dt>Last name</dt><dd>{{ m.last_name }}</dd>
+    <dt>Email</dt><dd>{{ m.email }}</dd>
+    <dt>Years of professional coding</dt><dd>{{ m.years_coding or 'Not given' }}</dd>
+    <dt>AI coding tools they use</dt><dd>{{ (m.ai_tools or [])|join(', ') or 'Not given' }}</dd>
+    <dt>Details entered</dt><dd>{{ m.entered_at|when or 'Not recorded' }}{% if m.updated_at and m.updated_at != m.entered_at %}, last changed {{ m.updated_at|when }}{% endif %}</dd>
+    <dt>Total active time</dt><dd>{{ p.secs|dur or 'None recorded' }}</dd>
+  </dl>
+</section>
+{% if p.problems %}
+<section class="section">
+  <h2 class="mb-12">File problems</h2>
+  <ul class="cmdlist">{% for x in p.problems %}<li><span class="dot bad" aria-hidden="true"></span><span class="small">{{ x }}</span></li>{% endfor %}</ul>
+</section>
+{% endif %}
+<section class="section">
+  <h2 class="mb-12">Tasks</h2>
+  <div class="table-wrap"><table>
+  <thead><tr><th>Build</th><th>Status</th><th>Progress</th><th class="num">Active time</th><th>Finished</th><th></th></tr></thead>
+  <tbody>
+  {% for t in p.tasks %}
+  <tr><td><a href="/review/b/{{ t.bid }}"><b>{{ t.bid }}</b></a></td>
+    <td><span class="status {{ status_class[t.status] }}">{{ status_word[t.status] }}</span></td>
+    <td><div class="progress-cell"><progress max="100" value="{{ t.pct }}" class="{{ 'done' if t.complete }}"></progress><span class="small num">{{ t.prog.steps[0] }}/{{ t.prog.steps[1] }} steps, {{ t.parts }}/4 parts</span></div></td>
+    <td class="small num">{{ t.secs|dur }}</td>
+    <td class="small">{{ t.rec.finished_at|when }}</td>
+    <td class="num"><a class="btn sm" href="/review/view/{{ p.id }}/{{ t.bid }}">View labels</a></td></tr>
+  {% else %}<tr><td colspan="6" class="empty">No answer files for builds in tasks/.</td></tr>{% endfor %}
+  </tbody></table></div>
+</section>
+{% endblock %}

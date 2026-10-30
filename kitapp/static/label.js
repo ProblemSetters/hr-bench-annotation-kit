@@ -1,0 +1,1183 @@
+// Annotator workspace. Three sections, each with one job:
+//   Steps       read each step and label it (parts 2 and 3)
+//   Final build the finished repo, answers, scores and logs, for reference
+//   Wrap up     grade the session, list failures, submit (parts 1 and 4)
+// Everything from a build is untrusted text. It is only inserted as text nodes, never as HTML.
+(function () {
+  'use strict';
+  const root = document.getElementById('app');
+  const API = root.dataset.api, CSRF = root.dataset.csrf, READONLY = root.dataset.readonly === 'true';
+  // The local kit has no admin: a task is "finished" (the annotator can reopen it), not "submitted" and locked.
+  const KIT = root.dataset.kit === 'true', REVIEWER = root.dataset.viewer === 'admin';
+  const T = KIT ? {
+    wrap: 'Wrap up & finish', done: 'finished', doneTitle: 'Finished', todoTitle: 'Mark this task as finished', button: 'Mark as finished', busy: 'Saving…',
+    doneNote: 'Your answers are saved in your annotations folder. Reopen the task if you need to change something.',
+    readyNote: 'You can reopen it later if you need to.', intro: 'When all four parts are done, mark the task as finished.',
+    confirm: 'Mark this task as finished? You can reopen it later.', readonly: 'Finished. Reopen it on the Wrap up page to make changes.',
+    viewing: (done) => `You are viewing this person's labels (${done ? 'finished' : 'not finished yet'}). Nothing can be changed.`,
+    loadHelp: 'Reload the page. If it keeps happening, copy this task folder again from the zip you were sent.',
+  } : {
+    wrap: 'Wrap up & submit', done: 'submitted', doneTitle: 'Submitted', todoTitle: 'Submit this task', button: 'Submit task', busy: 'Submitting…',
+    doneNote: 'Your labels are locked. Ask the admin if something needs to change.',
+    readyNote: 'After you submit, your labels are locked.', intro: 'When all four parts are done, submit.',
+    confirm: 'Submit this task? Your labels will be locked unless the admin reopens it.', readonly: 'Submitted. This task is read only.',
+    viewing: (done) => `You are viewing this person's labels (${done ? 'submitted' : 'not submitted yet'}). Nothing can be changed.`,
+    loadHelp: 'Reload the page, or tell the admin if it keeps happening.',
+  };
+  const S = { schema: null, build: null, steps: [], labels: {}, progress: null, complete: false, status: '', cache: {},
+              railFilter: 'all', outFilter: 'all', outPage: 0, repoQuery: '', repoChangedOnly: false, openDirs: new Set() };
+  const key = (p, t) => p + '|' + (t || '');
+  const $ = (id) => document.getElementById(id);
+  const SVGNS = 'http://www.w3.org/2000/svg';
+
+  // ---------- tiny DOM helpers ----------
+  function el(tag, attrs, ...kids) {
+    const n = document.createElement(tag);
+    setAttrs(n, attrs);
+    append(n, kids);
+    return n;
+  }
+  function svg(tag, attrs, ...kids) {
+    const n = document.createElementNS(SVGNS, tag);
+    for (const [k, v] of Object.entries(attrs || {})) {
+      if (v === null || v === undefined) continue;
+      if (k.startsWith('on')) n.addEventListener(k.slice(2), v); else n.setAttribute(k, v);
+    }
+    append(n, kids);
+    return n;
+  }
+  function setAttrs(n, attrs) {
+    for (const [k, v] of Object.entries(attrs || {})) {
+      if (v === null || v === undefined || v === false) continue;
+      if (k === 'class') n.className = v;
+      else if (k === 'style') Object.assign(n.style, v);
+      else if (k.startsWith('on')) n.addEventListener(k.slice(2), v);
+      else if (['checked', 'disabled', 'selected', 'open', 'value'].includes(k)) n[k] = v;
+      else n.setAttribute(k, v === true ? '' : v);
+    }
+  }
+  function append(n, kids) {
+    for (const c of kids.flat(Infinity)) {
+      if (c === null || c === undefined || c === false) continue;
+      n.append(c instanceof Node ? c : document.createTextNode(String(c)));
+    }
+  }
+  const clear = (n) => { n.replaceChildren(); return n; };
+  const plural = (n, one, many) => `${n.toLocaleString()} ${n === 1 ? one : (many || one + 's')}`;
+  const fmtTime = (ts) => { const d = ts && new Date(ts); return d && !isNaN(d) ? d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''; };
+  // Clock time for things inside a step; the full date and timezone are in the tooltip.
+  const fmtClock = (ts) => { const d = ts && new Date(ts); return d && !isNaN(d) ? d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : ''; };
+  const fmtFull = (ts) => { const d = ts && new Date(ts); return d && !isNaN(d) ? d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'long' }) : ''; };
+  const timeEl = (ts, cls) => ts ? el('time', { class: 'when ' + (cls || ''), datetime: ts, title: fmtFull(ts) }, fmtClock(ts)) : null;
+  function fmtDur(s) {
+    if (s === null || s === undefined) return '';
+    if (s < 60) return `${s} sec`;
+    if (s < 3600) return `${Math.round(s / 60)} min`;
+    return `${Math.floor(s / 3600)} h ${Math.round((s % 3600) / 60)} min`;
+  }
+  // Show file paths relative to the repo: drop the folder prefix that every changed file shares.
+  function relPath(p) {
+    // Cut each absolute path at the repo folder (the challenge repo is named after Orchestrate or its task).
+    const parts = (p || '').replace(/\\/g, '/').split('/');
+    const at = parts.findIndex((d) => /orchestrate|ghost[-_]?data|deletion[-_]?audit/i.test(d));
+    if (at >= 0 && at < parts.length - 1) return parts.slice(at + 1).join('/');
+    const home = parts.findIndex((d) => d === '[USER]');
+    return home >= 0 ? '~/' + parts.slice(home + 1).join('/') : parts.join('/');
+  }
+
+
+  const pct = (v) => `${Math.round(v * 1000) / 10}%`;
+  const shortTool = (t) => (t || '').split('__').pop();
+
+  async function api(path, opts = {}) {
+    let r;
+    try {
+      r = await fetch(API + path, { credentials: 'same-origin', ...opts,
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF, ...(opts.headers || {}) } });
+    } catch (e) {
+      throw Object.assign(new Error('the app is not reachable'), { retry: true });
+    }
+    const body = await r.json().catch(() => ({}));
+    if (!r.ok) throw Object.assign(new Error(body.error || ('Request failed (' + r.status + ')')), { retry: r.status >= 502 });
+    return body;
+  }
+  function data(name) {
+    if (!S.cache[name]) {
+      S.cache[name] = name === 'brief'
+        ? fetch('/api/brief', { credentials: 'same-origin' }).then((r) => r.json()).then((b) => b.brief)
+        : api('/data/' + name);
+    }
+    return S.cache[name];
+  }
+
+  // ---------- label state ----------
+  const part = (id) => S.schema.parts.find((p) => p.id === id);
+  const labelable = () => S.steps.filter((s) => s.labelable);
+  // Codex records a human's answer to the agent's multiple-choice question as tagged JSON. Show it as words.
+  function readableReply(text) {
+    const m = /<send_user_message_question_reply>\s*([\s\S]*?)\s*<\/send_user_message_question_reply>/.exec(text || '');
+    if (!m) return null;
+    try {
+      const items = JSON.parse(m[1]);
+      return items.map((it) => `The agent asked: ${it.question}\nThe human chose: ${it.answer}`).join('\n\n');
+    } catch (e) { return null; }
+  }
+  const isEmpty = (x) => x === null || x === undefined || x === '' || (Array.isArray(x) && !x.length);
+  const isReq = (f, v) => f.required || Object.entries(f.required_if || {}).some(([k, want]) => v[k] === want);
+  function fieldsOk(fields, v) {
+    if (!v) return false;
+    return fields.every((f) => {
+      const x = v[f.id];
+      if (isReq(f, v) && isEmpty(x)) return false;
+      if (x && f.min_chars && String(x).trim().length < f.min_chars) return false;
+      if (f.type === 'checklist' && isReq(f, v) && !checklistDone(f, x)) return false;
+      return true;
+    });
+  }
+  // Every item answered, and every Yes points at a step.
+  const checklistDone = (f, x) => f.items.every((it) => { const a = (x || {})[it.id] || {}; return a.answer === 'No' || (a.answer === 'Yes' && a.step); });
+  function stepState(s) {
+    if (!s.labelable) return 'none';
+    const a = fieldsOk(part('steps').fields, S.labels[key('steps', s.id)]);
+    const b = fieldsOk(part('prompts').fields, S.labels[key('prompts', s.id)]);
+    if (a && b) return 'done';
+    return (S.labels[key('steps', s.id)] || S.labels[key('prompts', s.id)]) ? 'partial' : 'todo';
+  }
+  const nextTodo = () => labelable().find((s) => stepState(s) !== 'done');
+
+  // Each label has a revision number, so "All changes saved" only shows once the latest
+  // edit of every label has reached the server, and leaving the page warns while saves are pending.
+  const timers = {};
+  const revisions = {};
+  const pending = new Set();
+  const retries = {};
+  function save(p, target, value, again) {
+    const saveKey = key(p, target);
+    const revision = again ? revisions[saveKey] : (revisions[saveKey] || 0) + 1;
+    revisions[saveKey] = revision;
+    if (!again) retries[saveKey] = 0;
+    S.labels[saveKey] = value;
+    if (READONLY) return;
+    pending.add(saveKey);
+    const st = $('savestate');
+    st.className = 'savestate'; st.textContent = 'Saving…';
+    clearTimeout(timers[saveKey]);
+    timers[saveKey] = setTimeout(async () => {
+      try {
+        const r = await api('/labels', { method: 'PUT', body: JSON.stringify({ part: p, target, value }) });
+        S.progress = r.progress; S.complete = r.complete;
+        retries[saveKey] = 0;
+        if (revisions[saveKey] === revision) pending.delete(saveKey);
+        st.textContent = pending.size ? 'Saving…' : 'All changes saved';
+        renderTaskbar(); refreshRailIcons();
+      } catch (e) {
+        if (revisions[saveKey] !== revision) return;  // a newer edit of this answer is already on its way
+        st.className = 'savestate bad';
+        if (e.retry) {
+          // The app is not reachable (stopped, restarting, or a crash). Keep the answer and try again on our own.
+          const wait = Math.min(30000, 2000 * 2 ** Math.min(4, (retries[saveKey] = (retries[saveKey] || 0) + 1) - 1));
+          st.textContent = 'Not saved yet, retrying…';
+          timers[saveKey] = setTimeout(() => { if (revisions[saveKey] === revision) save(p, target, value, true); }, wait);
+        } else {
+          st.textContent = 'Not saved: ' + e.message;
+        }
+      }
+    }, again ? 0 : 400);
+  }
+  window.addEventListener('beforeunload', (e) => {
+    if (!pending.size) return;
+    e.preventDefault();
+    e.returnValue = '';
+  });
+
+  // ---------- routing (state lives in the URL hash) ----------
+  function route() {
+    const parts = location.hash.replace(/^#\/?/, '').split('/').map(decodeURIComponent);
+    const mode = ['steps', 'final', 'wrap'].includes(parts[0]) ? parts[0] : 'steps';
+    if (mode === 'steps') {
+      const s = S.steps.find((x) => x.id === parts[1]) || nextTodo() || labelable()[0] || S.steps[0];
+      return { mode, step: s, tab: ['overview', 'changes', 'checks', 'timeline'].includes(parts[2]) ? parts[2] : 'overview' };
+    }
+    if (mode === 'final') return { mode, section: parts[1] || 'summary', arg: parts.slice(2).join('/') };
+    return { mode };
+  }
+  const go = (hash) => { if (location.hash !== hash) location.hash = hash; else render(); };
+  const stepHash = (s, tab) => `#/steps/${encodeURIComponent(s.id)}${tab && tab !== 'overview' ? '/' + tab : ''}`;
+  window.addEventListener('hashchange', render);
+
+  // ---------- task bar ----------
+  function renderTaskbar() {
+    const r = route(), L = labelable();
+    const doneSteps = L.filter((s) => stepState(s) === 'done').length;
+    const parts = ['session', 'failures'].filter((p) => S.progress[p][0] === S.progress[p][1]).length;
+    const totalUnits = 2 * L.length + 2;
+    const doneUnits = S.progress.steps[0] + S.progress.prompts[0] + parts;
+    $('t-prog').textContent = `${doneSteps} of ${L.length} steps labelled`;
+    $('t-bar').style.width = (totalUnits ? Math.round(100 * doneUnits / totalUnits) : 0) + '%';
+    const m = clear($('modes'));
+    const s0 = r.mode === 'steps' ? r.step : (nextTodo() || L[0] || S.steps[0]);
+    m.append(
+      el('a', { href: stepHash(s0), 'aria-current': r.mode === 'steps' ? 'page' : null }, 'Steps', el('span', { class: 'n num' }, `${doneSteps}/${L.length}`)),
+      el('a', { href: '#/final/summary', 'aria-current': r.mode === 'final' ? 'page' : null }, 'Final build'),
+      el('a', { href: '#/wrap', 'aria-current': r.mode === 'wrap' ? 'page' : null }, T.wrap,
+        el('span', { class: 'n' }, S.status === 'submitted' ? T.done : S.complete ? 'ready' : `${Object.values(S.progress).filter(([d, t]) => d === t).length}/4 parts`)));
+  }
+
+  function render() {
+    const r = route();
+    renderTaskbar();
+    const box = $('mode');
+    if (r.mode === 'steps') {
+      box.className = 'workspace';
+      clear(box).append(renderRail(r.step), renderStepPane(r.step, r.tab), renderStepLabels(r.step));
+      const cur = box.querySelector('.steprow[aria-current="true"]');
+      const list = box.querySelector('.rail-list');
+      if (cur && list) {
+        const top = cur.offsetTop, h = list.clientHeight;
+        if (top < list.scrollTop + 40 || top > list.scrollTop + h - 80) list.scrollTop = Math.max(0, top - h / 3);
+      }
+    } else if (r.mode === 'final') {
+      box.className = 'workspace two';
+      clear(box).append(renderFinalNav(r.section), el('div', { class: 'pane' }, el('div', { id: 'final' }, el('p', { class: 'muted' }, 'Loading…'))));
+      renderFinal(r.section, r.arg);
+    } else {
+      box.className = 'workspace one';
+      clear(box).append(renderWrap());
+    }
+  }
+
+  // ---------- STEPS: rail ----------
+  function stepMarks(s) {
+    const st = s.stats || {}, sm = s.summary || {};
+    const tests = (sm.metrics || []).some((m) => m.source === 'measured');
+    return [st.errors ? el('span', { class: 'mark bad', title: plural(st.errors, 'error') }) : null,
+            tests ? el('span', { class: 'mark info', title: 'Tests or scores measured' }) : null];
+  }
+  function renderRail(cur) {
+    const filters = [['all', 'All'], ['todo', 'To do'], ['errors', 'Errors'], ['tests', 'Tests']];
+    const keep = (s) => S.railFilter === 'all' ? true : S.railFilter === 'todo' ? s.labelable && stepState(s) !== 'done'
+      : S.railFilter === 'errors' ? (s.stats || {}).errors > 0 : ((s.summary || {}).metrics || []).length > 0 || (s.stats || {}).tests > 0;
+    const list = el('div', { class: 'rail-list', role: 'list' });
+    const multi = S.build.sessions.length > 1;
+    for (const sess of S.build.sessions) {
+      const own = S.steps.filter((s) => s.session === sess.id && keep(s));
+      if (!own.length) continue;
+      if (multi) list.append(el('div', { class: 'group' }, `${sess.tool}${sess.kind === 'subagent' ? ' (context only)' : ''}`));
+      for (const s of own) {
+        const txt = s.prompt ? s.prompt.text.replace(/-{5} (end of )?pasted text -{5}/g, ' ').replace(/\s+/g, ' ').trim() : 'Agent work before the first prompt';
+        list.append(el('button', { class: 'steprow' + (s.labelable ? '' : ' off'), 'aria-current': s === cur ? 'true' : null, 'data-step': s.id, role: 'listitem',
+          onclick: () => go(stepHash(s, route().tab)), 'aria-label': `${s.labelable ? 'Step ' + s.n : s.id}: ${txt.slice(0, 80)}` },
+          el('span', { class: 'sticon ' + stepState(s), 'aria-hidden': 'true' }),
+          el('span', { class: 'no' }, s.labelable ? s.n : '·'),
+          el('span', { class: 'txt' }, txt.slice(0, 120)),
+          el('span', { class: 'marks' }, stepMarks(s))));
+      }
+    }
+    if (!list.childNodes.length) list.append(el('p', { class: 'empty small' }, S.railFilter === 'todo' ? 'Every step is labelled.' : 'No steps match this filter.'));
+    const tabs = el('div', { class: 'railtabs', role: 'group', 'aria-label': 'Filter steps' },
+      filters.map(([id, label]) => el('button', { 'aria-pressed': String(S.railFilter === id), onclick: () => { S.railFilter = id; render(); } }, label)));
+    return el('aside', { class: 'rail', 'aria-label': 'Steps' }, el('div', { class: 'rail-head' }, tabs), list);
+  }
+  function refreshRailIcons() {
+    document.querySelectorAll('.steprow[data-step]').forEach((row) => {
+      const s = S.steps.find((x) => x.id === row.dataset.step);
+      const ic = row.querySelector('.sticon');
+      if (s && ic) ic.className = 'sticon ' + stepState(s);
+    });
+    const badge = $('stepbadge');
+    const r = route();
+    if (badge && r.step) setStateBadge(badge, r.step);
+  }
+
+  // ---------- STEPS: main pane ----------
+  const HINTS = { choice: ['Answer to the agent\'s question', 'info'], paste: ['Contains pasted text', 'info'], slash: ['Slash command', 'info'], agent: ['Written by the parent agent', 'warn'] };
+  function promptBody(text) {
+    const box = el('div', { class: 'prompt-text' });
+    for (const chunk of text.split(/(-{5} (?:end of )?pasted text -{5})/)) {
+      if (/^-{5} pasted text -{5}$/.test(chunk)) box.append(el('span', { class: 'pastemark' }, 'Pasted text starts'));
+      else if (/^-{5} end of pasted text -{5}$/.test(chunk)) box.append(el('span', { class: 'pastemark' }, 'Pasted text ends'));
+      else box.append(chunk.replace(/^\n+|\n+$/g, ''));
+    }
+    return box;
+  }
+  function clampable(node, limitChars, len, label) {
+    if (len <= limitChars) return node;
+    const wrap = el('div', { class: 'clamp' }, node);
+    const btn = el('button', { class: 'ghost sm', onclick: () => { const o = wrap.classList.toggle('open'); btn.textContent = o ? 'Show less' : label; } }, label);
+    return el('div', {}, wrap, btn);
+  }
+  function measuredBefore(n) {
+    const rs = (S.build.readings || []).filter((r) => r.n && r.n <= n && r.source === 'measured');
+    const tests = rs.filter((r) => r.kind === 'tests').pop();
+    const lab = primaryScoreLabel();
+    const score = rs.filter((r) => r.kind === 'score' && r.label === lab).pop();
+    return { tests, score, lab };
+  }
+  function primaryScoreLabel() {
+    if (S._lab !== undefined) return S._lab;
+    const c = {};
+    for (const r of S.build.readings || []) if (r.kind === 'score' && r.source === 'measured' && r.n) c[r.label] = (c[r.label] || 0) + 1;
+    S._lab = Object.entries(c).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+    return S._lab;
+  }
+  function readingText(m) {
+    return m.kind === 'tests' ? `${m.passed} passed${m.failed ? `, ${m.failed} failed` : ''}` : `${m.label} ${m.text}`;
+  }
+  function sourceBadge(m) {
+    return m.source === 'measured' ? el('span', { class: 'badge ok src' }, 'Measured') : el('span', { class: 'badge warn src', title: 'The agent said this in a message. Check it against a real test run.' }, 'Agent claimed');
+  }
+
+  function renderStepPane(s, tab) {
+    const L = labelable(), sm = s.summary || {}, st = s.stats || {};
+    const sess = S.build.sessions.find((x) => x.id === s.session) || {};
+    const idx = L.indexOf(s);
+    const prev = idx > 0 ? L[idx - 1] : null, next = idx >= 0 && idx < L.length - 1 ? L[idx + 1] : null;
+    const pane = el('div', { class: 'pane calm' });
+
+    if (!localStorage.getItem('astra-intro-dismissed') && !READONLY) {
+      const intro = el('div', { class: 'tip' },
+        el('span', { class: 'grow' }, 'Read the step, then answer on the right. The finished repo and scores are under ', el('b', {}, 'Final build'), '.'),
+        el('button', { class: 'ghost sm', onclick: () => { try { localStorage.setItem('astra-intro-dismissed', '1'); } catch (e) { /* private mode */ } intro.remove(); } }, 'Got it'));
+      pane.append(intro);
+    }
+    const notes = (S.build.notes || []).filter((x) => !/^Other files|forks of earlier sessions/i.test(x));
+    if (READONLY) notes.unshift(REVIEWER ? T.viewing(S.status === 'submitted') : T.readonly);
+    if (!s.labelable) notes.push('Context only. You do not label this step.');
+    for (const n of notes) pane.append(el('div', { class: 'tip quiet' }, n));
+
+    const hint = s.prompt && HINTS[s.prompt.hint];
+    pane.append(el('header', { class: 'stephead' },
+      el('div', { class: 'stephead-row' },
+        el('h1', {}, s.labelable ? ['Step ', s.n, el('span', { class: 'of' }, ` of ${L.length}`)] : (sess.kind === 'subagent' ? 'Subagent work' : 'Setup work')),
+        el('span', { class: 'spacer' }),
+        el('button', { class: 'ghost iconbtn', disabled: !prev, onclick: () => go(stepHash(prev, tab)), 'aria-label': 'Previous step', title: 'Previous step (k)' }, '\u2039'),
+        el('button', { class: 'ghost iconbtn', disabled: !next, onclick: () => go(stepHash(next, tab)), 'aria-label': 'Next step', title: 'Next step (j)' }, '\u203a')),
+      L.length > 1 ? sessionStrip(s) : null));
+    const before = prevReply(s);
+    if (s.prompt && before) {
+      const shortAnswer = s.prompt.text.trim().length < 40;
+      pane.append(el('details', { class: 'context', open: shortAnswer },
+        el('summary', {}, el('span', { class: 'chev', 'aria-hidden': 'true' }, '\u203a'), ' Before this prompt, the agent said', shortAnswer ? el('span', { class: 'muted' }, ', so the short prompt below is an answer to it') : null),
+        el('div', { class: 'context-body md' }, clampable(renderMarkdown(before.text), 500, before.text.length, 'Show all of it'))));
+    }
+    if (s.prompt) pane.append(el('div', { class: 'who-label' }, s.prompt.hint === 'agent' ? 'The parent agent asked' : 'The human asked', hint ? el('span', { class: 'badge ' + hint[1] }, hint[0]) : null),
+      el('div', { class: 'promptbox' }, clampable(promptBody(s.prompt.text), 600, s.prompt.text.length, 'Show the full prompt')));
+    else pane.append(el('p', { class: 'muted' }, 'The agent worked on its own here, before or between prompts.'));
+
+    // one quiet line instead of a wall of tiles
+    const add = (sm.changed || []).reduce((a, c) => a + c.added, 0), rem = (sm.changed || []).reduce((a, c) => a + c.removed, 0);
+    const best = (sm.metrics || []).filter((m) => m.source === 'measured').pop() || (sm.metrics || []).slice(-1)[0];
+    const facts = [
+      s.ts ? el('time', { datetime: s.ts, title: fmtFull(s.ts) }, 'Started ' + fmtTime(s.ts)) : null,
+      sm.duration_s !== null && sm.duration_s !== undefined ? el('span', {}, 'Ran ' + fmtDur(sm.duration_s)) : null,
+      el('span', {}, sess.tool),
+      st.tools ? el('a', { href: stepHash(s, 'timeline') }, plural(st.tools, 'tool call')) : el('span', { class: 'muted' }, 'No tool calls'),
+      (sm.changed || []).length ? el('a', { href: stepHash(s, 'changes') }, plural(sm.changed.length, 'file') + ' changed ', el('span', { class: 'plus' }, `+${add}`), ' ', el('span', { class: 'minus' }, `−${rem}`)) : null,
+      best ? el('a', { href: stepHash(s, 'checks') }, best.kind === 'tests' ? `Tests ${best.passed}/${best.passed + best.failed}` : `${best.label[0].toUpperCase() + best.label.slice(1)} ${best.text}`, best.source === 'claimed' ? el('span', { class: 'claim' }, ' (claimed)') : null) : null,
+      st.errors ? el('a', { href: stepHash(s, 'timeline'), class: 'bad' }, plural(st.errors, 'error')) : null,
+      st.interrupts ? el('span', { class: 'bad' }, 'Interrupted') : null,
+    ].filter(Boolean);
+    pane.append(el('div', { class: 'facts' }, facts));
+
+    // tabs
+    const toolActs = s.actions.filter((a) => a.k === 'tool');
+    const diffs = toolActs.flatMap((a) => a.diffs || []);
+    const checks = toolActs.filter((a) => (a.tags || []).includes('test_or_eval') || (a.metrics || []).length);
+    const claims = s.actions.filter((a) => a.k === 'msg' && (a.metrics || []).length);
+    const tabs = [['overview', 'Agent response', null], ['changes', 'Changes', diffs.length], ['checks', 'Tests and scores', checks.length + claims.length], ['timeline', 'Everything', s.actions.length]];
+    pane.append(el('nav', { class: 'subtabs', 'aria-label': 'Step detail' }, tabs.map(([id, label, n]) =>
+      el('a', { href: stepHash(s, id), 'aria-current': tab === id ? 'page' : null }, label, n ? el('span', { class: 'n num' }, n) : null))));
+    const body = el('div', {});
+    if (tab === 'overview') body.append(stepOverview(s, toolActs));
+    if (tab === 'changes') append(body, [diffs.length ? diffs.map((d, i) => diffCard(d, i, diffs.length)) : el('p', { class: 'empty' },
+      'No files were changed in this step.')]);
+    if (tab === 'checks') body.append(checksView(checks, claims));
+    if (tab === 'timeline') body.append(timeline(s.actions));
+    pane.append(body);
+
+    // where the build stood: folded away, one line when closed
+    if (s.labelable && (S.build.readings || []).length) pane.append(progressFold(s.n));
+    return pane;
+  }
+
+  // The last thing the agent said before this step's prompt (the previous step's reply, in time order).
+  function prevReply(s) {
+    const i = S.steps.indexOf(s);
+    for (let j = i - 1; j >= 0; j--) {
+      const p = S.steps[j];
+      if (p.session !== s.session) continue;
+      const m = [...p.actions].reverse().find((a) => a.k === 'msg' || (a.k === 'tool' && /request_user_input|ask/i.test(a.tool || '')));
+      if (m) return { text: m.k === 'msg' ? m.text : JSON.stringify(m.input || {}, null, 1) };
+      if (p.prompt) return null;
+    }
+    return null;
+  }
+
+  function sessionStrip(cur) {
+    const L = labelable();
+    const strip = el('div', { class: 'strip', role: 'list', 'aria-label': 'Steps in this session' });
+    let errs = 0;
+    for (const s of L) {
+      const st = stepState(s), e = (s.stats || {}).errors > 0, t = ((s.summary || {}).metrics || []).some((m) => m.source === 'measured');
+      errs += e;
+      const what = { done: 'labelled', partial: 'partly labelled', todo: 'not labelled' }[st];
+      strip.append(el('a', { href: stepHash(s, route().tab), role: 'listitem', 'aria-current': s === cur ? 'step' : null,
+        class: `tick ${st}${s === cur ? ' cur' : ''}${e ? ' err' : ''}`,
+        title: `Step ${s.n}: ${what}${e ? ', has errors' : ''}${t ? ', tests or scores measured' : ''}`,
+        'aria-label': `Step ${s.n}, ${what}${e ? ', has errors' : ''}` }));
+    }
+    const done = L.filter((s) => stepState(s) === 'done').length;
+    return el('div', {}, strip, el('div', { class: 'strip-key' },
+      el('span', {}, el('i', { style: { background: 'var(--data)' } }), `${done} labelled`),
+      el('span', {}, el('i', { style: { background: 'var(--active)' } }), `${L.length - done} to go`),
+      errs ? el('span', {}, el('i', { class: 'dot', style: { background: 'var(--negative)' } }), plural(errs, 'step') + ' with errors') : null));
+  }
+
+  function progressFold(n) {
+    const { tests, score, lab } = measuredBefore(n);
+    const bits = [];
+    if (tests) bits.push(`tests ${tests.passed}/${tests.passed + tests.failed}`);
+    if (score) bits.push(`${lab} ${score.text}`);
+    const summary = bits.length ? 'so far ' + bits.join(', ') : 'no tests or scores measured yet';
+    const d = el('details', { class: 'fold' }, el('summary', {}, el('span', { class: 'chev', 'aria-hidden': 'true' }, '›'), ' Where the build stood after this step ', el('span', { class: 'muted' }, `· ${summary}`)),
+      el('div', { class: 'fold-body' },
+        tests ? el('p', { class: 'small' }, `Tests: ${readingText(tests)} ${tests.n === n ? '(this step)' : `(last run in step ${tests.n})`}`) : null,
+        score ? el('p', { class: 'small' }, `${lab[0].toUpperCase() + lab.slice(1)}: ${score.text} ${score.n === n ? '(this step)' : `(last measured in step ${score.n})`}`) : null,
+        chart(n, labelable().length, 110), el('a', { href: '#/final/scores', class: 'small' }, 'All scores and tests')));
+    return d;
+  }
+
+  function chart(cur, N, H) {
+    // Marks are drawn in SVG; every label is HTML, so it keeps its size at any width.
+    const W = 680, pt = 8, pb = 8;
+    const x = (n) => (N <= 1 ? 0 : (n - 1) * W / (N - 1));
+    const y = (v) => pt + (1 - v) * (H - pt - pb);
+    const lab = primaryScoreLabel();
+    const R = (S.build.readings || []).filter((r) => r.n);
+    const tests = R.filter((r) => r.kind === 'tests' && r.source === 'measured' && r.passed + r.failed > 0).map((r) => ({ n: r.n, v: r.passed / (r.passed + r.failed), t: `Step ${r.n}: ${r.passed}/${r.passed + r.failed} tests passing` }));
+    const score = R.filter((r) => r.kind === 'score' && r.label === lab && r.source === 'measured').map((r) => ({ n: r.n, v: r.value, t: `Step ${r.n}: ${r.label} ${r.text}` }));
+    const claims = R.filter((r) => r.kind === 'score' && r.label === lab && r.source === 'claimed').map((r) => ({ n: r.n, v: r.value, t: `Step ${r.n}: agent claimed ${r.label} ${r.text}` }));
+    if (!tests.length && !score.length && !claims.length) return el('p', { class: 'muted small' }, 'Nothing to chart yet.');
+    const g = svg('svg', { viewBox: `0 0 ${W} ${H}`, class: 'chart', role: 'img', 'aria-label': 'Tests passing and score across the session', preserveAspectRatio: 'none' });
+    g.style.height = H + 'px';
+    for (const v of [0, 0.5, 1]) g.append(svg('line', { x1: 0, x2: W, y1: y(v), y2: y(v), class: 'grid', 'vector-effect': 'non-scaling-stroke' }));
+    const path = (pts, cls) => pts.length > 1 && g.append(svg('polyline', { class: 'line ' + cls, points: pts.map((p) => `${x(p.n)},${y(p.v)}`).join(' ') }));
+    path(tests, 'tests'); path(score, 'score');
+    if (cur) g.append(svg('line', { x1: x(cur), x2: x(cur), y1: 0, y2: H, class: 'cur', 'vector-effect': 'non-scaling-stroke' }));
+    const box = el('div', { class: 'chartbox' });
+    const plot = el('div', { style: { position: 'relative' } }, g);
+    // dots as HTML so they stay round when the plot stretches
+    const dot = (p, cls) => el('a', { href: '#', class: 'pt ' + cls, title: p.t, 'aria-label': p.t,
+      style: { left: (100 * x(p.n) / W) + '%', top: (100 * y(p.v) / H) + '%' },
+      onclick: (e) => { e.preventDefault(); const s = labelable()[p.n - 1]; if (s) go(stepHash(s, 'checks')); } });
+    tests.forEach((p) => plot.append(dot(p, 'pt-tests'))); score.forEach((p) => plot.append(dot(p, 'pt-score'))); claims.forEach((p) => plot.append(dot(p, 'pt-claim')));
+    for (const v of [0, 0.5, 1]) box.append(el('span', { class: 'chart-y', style: { top: (100 * y(v) / H) + '%' } }, `${v * 100}%`));
+    box.append(plot);
+    const legend = el('div', { class: 'legend' },
+      tests.length ? el('span', {}, el('i', { style: { background: 'var(--info)' } }), 'Tests passing, measured') : null,
+      score.length ? el('span', {}, el('i', { style: { background: 'var(--data)' } }), `${lab[0].toUpperCase() + lab.slice(1)}, measured`) : null,
+      claims.length ? el('span', {}, el('i', { style: { border: '2px solid var(--warning)', boxSizing: 'border-box' } }), `${lab[0].toUpperCase() + lab.slice(1)}, agent claimed`) : null);
+    return el('div', {}, box, el('div', { class: 'chart-x' }, el('span', {}, 'Step 1'), cur ? el('span', {}, `You are on step ${cur}`) : null, el('span', {}, `Step ${N}`)), legend);
+  }
+
+
+  function stepOverview(s, toolActs) {
+    const sm = s.summary || {}, box = el('div', { class: 'overview' });
+    box.append(el('div', { class: 'who-label' }, 'What the agent said'),
+      sm.reply ? el('div', { class: 'reply' }, clampable(el('div', { class: 'md' }, renderMarkdown(sm.reply)), 700, sm.reply.length, 'Show the full reply'))
+        : el('p', { class: 'muted' }, 'The agent did not write a reply in this step.'));
+    if ((sm.changed || []).length) {
+      const shown = sm.changed.slice(0, 6);
+      box.append(el('div', { class: 'who-label mt-16' }, 'Files changed'),
+        el('div', { class: 'filechips' }, shown.map((c) => el('a', { href: stepHash(s, 'changes'), class: 'filechip', title: c.file }, relPath(c.file).split('/').pop(),
+          el('span', { class: 'plus' }, ` +${c.added}`), el('span', { class: 'minus' }, ` −${c.removed}`))),
+          sm.changed.length > 6 ? el('a', { href: stepHash(s, 'changes'), class: 'small' }, `and ${sm.changed.length - 6} more`) : null));
+    }
+    const cmds = toolActs.filter((a) => a.input && a.input.command !== undefined);
+    if (cmds.length) {
+      const failed = cmds.filter((a) => a.error).length;
+      const list = el('div', { class: 'cmds fold-body' });
+      const PAGE = 30;
+      const drawCmds = (n) => {
+        clear(list);
+        for (const a of cmds.slice(0, n)) list.append(commandRow(a));
+        if (cmds.length > n) list.append(el('button', { class: 'ghost sm', onclick: () => drawCmds(n + PAGE) }, `Show ${Math.min(PAGE, cmds.length - n)} more of ${cmds.length - n}`));
+      };
+      drawCmds(PAGE);
+      box.append(el('details', { class: 'fold mt-16', open: cmds.length <= 8 },
+        el('summary', {}, el('span', { class: 'chev', 'aria-hidden': 'true' }, '›'), ` Commands it ran (${cmds.length})`, failed ? el('span', { class: 'bad' }, `, ${failed} failed`) : null),
+        list));
+    }
+    if (!toolActs.length && !sm.reply) box.append(el('p', { class: 'empty' }, 'Nothing else happened in this step.'));
+    const L = labelable(), nx = L[L.indexOf(s) + 1];
+    if (s.labelable && nx) {
+      const t = nx.prompt.text.replace(/-{5} (end of )?pasted text -{5}/g, ' ').replace(/\s+/g, ' ').trim();
+      box.append(el('div', { class: 'nextup' }, el('div', { class: 'who-label' }, 'What the human said next', timeEl(nx.ts)),
+        el('p', {}, t.slice(0, 280) + (t.length > 280 ? '\u2026' : '')),
+        el('a', { href: stepHash(nx), class: 'small' }, `Open step ${nx.n}`)));
+    } else if (s.labelable) box.append(el('div', { class: 'nextup' }, el('div', { class: 'who-label' }, 'What the human said next'), el('p', { class: 'muted' }, 'Nothing. This is the last step of the session.')));
+    return box;
+  }
+
+  function commandRow(a) {
+    const cmd = String(a.input.command);
+    const first = cmd.split('\n').find((l) => l.trim()) || '';
+    const lines = cmd.split('\n').length;
+    return el('details', { class: 'cmdrow' + (a.error ? ' bad' : '') },
+      el('summary', {},
+        el('span', { class: 'dot ' + (a.error ? 'bad' : 'neutral'), 'aria-hidden': 'true' }),
+        timeEl(a.ts),
+        el('span', { class: 'cmdtext' }, a.input.description ? el('span', { class: 'desc' }, a.input.description) : null, el('code', {}, first)),
+        el('span', { class: 'cmdmeta' }, lines > 1 ? el('span', { class: 'muted tiny' }, `${lines} lines`) : null,
+          a.result ? el('span', { class: 'badge info' }, a.result) : null, a.error ? el('span', { class: 'badge bad' }, 'failed') : null)),
+      el('div', { class: 'cmdbody' },
+        el('pre', {}, cmd),
+        a.output ? el('div', {}, el('div', { class: 'sublabel' }, 'Output'), el('pre', {}, a.output)) : el('p', { class: 'muted small' }, 'No output was recorded.')));
+  }
+
+  const OPS = { edit: 'Edited', create: 'New file', write: 'Written in full', delete: 'Deleted' };
+  function diffCard(d, i, total) {
+    const lines = d.lines || [], LIMIT = 120;
+    const body = el('div', { class: 'diff-body' });
+    const draw = (all) => { clear(body); for (const ln of (all ? lines : lines.slice(0, LIMIT))) {
+      const c = ln.startsWith('@@') ? 'hunk' : ln[0] === '+' ? 'add' : ln[0] === '-' ? 'del' : '';
+      body.append(el('span', { class: 'dl ' + c }, c === 'hunk' ? ln : ln.slice(1) || ' '));
+    } };
+    draw(false);
+    const more = lines.length > LIMIT ? el('div', { class: 'diff-more' }, el('button', { class: 'sm', onclick: (e) => { draw(true); e.target.remove(); } }, `Show ${lines.length - LIMIT} more lines`)) : null;
+    return el('div', { class: 'diff' },
+      el('div', { class: 'diff-head' }, el('span', { class: 'path', title: d.file }, relPath(d.file) || '(unknown file)'), el('span', { class: 'badge ' + (d.op === 'create' ? 'info' : d.op === 'delete' ? 'bad' : '') }, OPS[d.op] || d.op),
+        el('span', { class: 'spacer' }), el('span', { class: 'num small' }, el('span', { class: 'plus' }, `+${d.added}`), ' ', el('span', { class: 'minus' }, `−${d.removed}`)),
+        total > 1 ? el('span', { class: 'muted tiny' }, `change ${i + 1} of ${total}`) : null),
+      body, more, d.more ? el('div', { class: 'diff-more muted small' }, `${d.more} more lines were cut by the pipeline.`) : null);
+  }
+
+  function checksView(checks, claims) {
+    const box = el('div', {});
+    if (!checks.length && !claims.length) return el('div', { class: 'empty card' }, 'No tests, evaluations or score claims in this step.');
+    for (const a of checks) {
+      box.append(el('section', { class: 'card' },
+        el('div', { class: 'card-head' }, el('span', { class: 'dot ' + (a.error ? 'bad' : ''), style: { marginTop: 0 } }), el('h3', {}, a.error ? 'Check failed' : 'Check ran'), timeEl(a.ts),
+          (a.metrics || []).map((m) => el('span', { class: 'badge ' + (m.kind === 'tests' && m.failed ? 'bad' : 'ok') }, readingText(m))), el('span', { class: 'spacer' }), el('span', { class: 'badge ok' }, 'Measured')),
+        el('pre', {}, (a.input && a.input.command) || JSON.stringify(a.input, null, 2)),
+        a.output ? el('details', { style: { marginTop: '8px' }, open: !!a.error }, el('summary', { class: 'small' }, 'Output'), el('pre', { style: { marginTop: '6px' } }, a.output)) : null));
+    }
+    if (claims.length) {
+      box.append(el('h3', { style: { margin: '18px 0 8px' } }, 'What the agent claimed'),
+        el('p', { class: 'small muted' }, 'These numbers come from the agent\'s own messages, not from a command. Check them against a real run above or in Final build.'));
+      for (const a of claims) box.append(el('section', { class: 'card' }, el('div', { class: 'card-head' }, (a.metrics || []).map((m) => el('span', { class: 'badge warn' }, readingText(m)))),
+        clampable(el('div', { class: 'prose small' }, a.text), 600, a.text.length, 'Show the whole message')));
+    }
+    return box;
+  }
+
+  function timeline(actions) {
+    if (!actions.length) return el('div', { class: 'empty card' }, 'No agent actions were recorded for this step.');
+    const ol = el('ol', { class: 'tl' });
+    for (const a of actions) {
+      let li;
+      if (a.k === 'msg') li = el('li', {}, el('span', { class: 'ic agent', 'aria-hidden': 'true' }, 'A'), el('div', { class: 'head' }, el('span', { class: 'kind' }, 'Agent'), timeEl(a.ts)),
+        el('div', { class: 'body' }, clampable(el('div', { class: 'md' }, renderMarkdown(a.text)), 700, a.text.length, 'Show more')));
+      else if (a.k === 'tool') {
+        const cmd = a.input && a.input.command !== undefined ? String(a.input.command) : null;
+        const preview = cmd ? cmd.split('\n').find((l) => l.trim()) : (a.diffs || []).length ? a.diffs.map((d) => relPath(d.file)).join(', ') : (a.input && (a.input.file_path || a.input.pattern || a.input.query)) || '';
+        li = el('li', {}, el('span', { class: 'ic ' + (a.error ? 'bad' : 'tool'), 'aria-hidden': 'true' }, a.error ? '!' : 'T'),
+          el('details', { open: !!a.error }, el('summary', {}, el('div', { class: 'head' }, el('span', { class: 'chev', 'aria-hidden': 'true' }, '›'), el('span', { class: 'kind' }, shortTool(a.tool)), timeEl(a.ts),
+            a.result ? el('span', { class: 'badge info' }, a.result) : null, a.error ? el('span', { class: 'badge bad' }, 'failed') : null, (a.diffs || []).length ? el('span', { class: 'badge' }, plural(a.diffs.length, 'file') + ' changed') : null),
+            el('span', { class: 'preview' }, preview || '')),
+          el('div', { class: 'body' }, (a.diffs || []).length ? a.diffs.map((d, i) => diffCard(d, i, a.diffs.length)) : cmd !== null ? el('pre', {}, (a.input.description ? '# ' + a.input.description + '\n' : '') + cmd) : el('pre', {}, JSON.stringify(a.input || {}, null, 2)),
+            a.output ? el('div', {}, el('div', { class: 'sublabel', style: { margin: '4px 0' } }, 'Output'), el('pre', {}, a.output)) : null)));
+      } else if (a.k === 'think') li = el('li', {}, el('span', { class: 'ic', 'aria-hidden': 'true' }, 'R'), el('details', {}, el('summary', {}, el('div', { class: 'head' }, el('span', { class: 'chev' }, '›'), el('span', { class: 'kind muted' }, 'Agent reasoning summary'), timeEl(a.ts))), el('div', { class: 'body' }, el('div', { class: 'prose small' }, a.text))));
+      else if (a.k === 'interrupt') li = el('li', {}, el('span', { class: 'ic bad', 'aria-hidden': 'true' }, '!'), el('div', { class: 'head' }, el('span', { class: 'kind', style: { color: 'var(--negative)' } }, 'The human interrupted the agent'), timeEl(a.ts)));
+      else li = el('li', {}, el('span', { class: 'ic sys', 'aria-hidden': 'true' }, 'S'), el('details', {}, el('summary', {}, el('div', { class: 'head' }, el('span', { class: 'chev' }, '›'), el('span', { class: 'kind muted' }, a.text.split('\n')[0].slice(0, 120)), timeEl(a.ts))), el('div', { class: 'body' }, el('pre', {}, a.text))));
+      ol.append(li);
+    }
+    return ol;
+  }
+
+  // ---------- labelling guide (text lives in label_schema.json -> guide) ----------
+  const GUIDE_FOR = { effect: 'effect', human_corrected: 'corrections', reverted: 'corrections', intent: 'intent', source: 'source',
+                      steering_quality: 'session', agent_quality: 'session', training_value: 'session', type: 'session',
+                      behaviours: 'session', involvement: 'session', confidence: 'session', noticed: 'session' };
+  let guideReturn = null;
+  function closeGuide() {
+    const d = $('guide'); if (!d) return;
+    d.remove(); document.removeEventListener('keydown', guideKeys, true);
+    if (guideReturn) guideReturn.focus();
+  }
+  function guideKeys(e) { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeGuide(); } }
+  function openGuide(section) {
+    const G = S.schema.guide;
+    if (!G) return;
+    closeGuide();
+    guideReturn = document.activeElement;
+    const close = el('button', { class: 'ghost sm', onclick: closeGuide }, 'Close');
+    const body = el('div', { class: 'drawer-body' },
+      G.status && root.dataset.viewer === 'admin' ? el('p', { class: 'note warn' }, G.status) : null,
+      el('p', {}, G.intro),
+      G.sections.map((sec) => el('section', { id: 'guide-' + sec.id, class: 'guide-sec' },
+        el('h3', {}, sec.title), sec.help ? el('p', { class: 'muted small' }, sec.help) : null,
+        el('dl', {}, sec.items.map((it) => [el('dt', {}, it.term), el('dd', {}, it.text)])))),
+      el('section', { id: 'guide-keys', class: 'guide-sec' }, el('h3', {}, 'Keyboard shortcuts'),
+        el('dl', { class: 'keys' }, [['j and k', 'Next and previous step'], ['n', 'Next step you have not finished'], ['1 to 4', 'Helped, Neutral, Hurt, Can\'t tell'],
+          ['c', 'The human had to correct this step (on or off)'], ['u', 'This step\'s work was undone later (on or off)'],
+          ['5 to 8', 'Who wrote the prompt: typed, pasted from another AI, generated by the tool, can\'t tell'], ['?', 'Open this guide'], ['Esc', 'Close it']]
+          .map(([k, d]) => [el('dt', {}, el('span', { class: 'kbd' }, k)), el('dd', {}, d)]))),
+      (G.examples || []).length ? el('section', { id: 'guide-examples', class: 'guide-sec' }, el('h3', {}, 'Worked examples'),
+        G.examples.map((x) => el('div', { class: 'example' }, el('b', {}, x.title),
+          el('p', {}, el('span', { class: 'muted' }, 'Prompt: '), x.prompt), el('p', {}, el('span', { class: 'muted' }, 'What happened: '), x.what),
+          el('p', {}, el('span', { class: 'muted' }, 'Labels: '), x.answer)))) : null);
+    const drawer = el('div', { id: 'guide', class: 'drawer-wrap' },
+      el('div', { class: 'drawer-backdrop', onclick: closeGuide }),
+      el('aside', { class: 'drawer', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'guide-title' },
+        el('div', { class: 'drawer-head' }, el('h2', { id: 'guide-title' }, 'How to label'), el('span', { class: 'spacer' }), close), body));
+    document.body.append(drawer);
+    document.addEventListener('keydown', guideKeys, true);
+    close.focus();
+    const target = section && $('guide-' + section);
+    if (target) target.scrollIntoView({ block: 'start' });
+  }
+  const guideLink = (section, label) => S.schema.guide ? el('button', { class: 'ghost guidebtn', type: 'button', onclick: () => openGuide(section),
+    'aria-label': label || 'How to answer this', title: label || 'How to answer this' }, '?') : null;
+
+  // ---------- trivial steps: fill only the obvious, empty answers ----------
+  const GO_AHEAD = /^(continue|go( on| ahead)?|proceed|ok(ay)?|yes|y|yep|sure|next|do it|done|submitted|thanks?|thank you|lgtm)[.!]*$/i;
+  function trivialKind(s) {
+    if (!s.labelable || !s.prompt) return null;
+    const t = s.prompt.text.trim();
+    if (s.prompt.hint === 'slash' || /^\/[a-z-]+(\s|$)/i.test(t)) return 'slash';
+    if (GO_AHEAD.test(t)) return 'goahead';
+    return null;
+  }
+  function quietStep(s) {
+    const st = s.stats || {};
+    return (st.tools || 0) <= 1 && !(st.errors) && !((s.summary || {}).changed || []).length;
+  }
+  function quickFill(s) {
+    const kind = trivialKind(s);
+    const filled = [];
+    const pv = { ...(S.labels[key('prompts', s.id)] || {}) };
+    if (!(pv.intent || []).length) { pv.intent = [kind === 'slash' ? 'Not a real prompt' : 'Go ahead or continue']; filled.push('what the prompt asks for'); }
+    if (!pv.source) { pv.source = 'Typed by the human'; filled.push('who wrote it'); }
+    if (filled.length) save('prompts', s.id, pv);
+    const sv = { ...(S.labels[key('steps', s.id)] || {}) };
+    if (!sv.effect && quietStep(s)) { sv.effect = 'Neutral'; save('steps', s.id, sv); filled.push('Neutral, because the agent did almost nothing'); }
+    return filled;
+  }
+
+  // ---------- later steps that changed the same files ----------
+  function laterChanges(s) {
+    const mine = new Set(((s.summary || {}).changed || []).map((c) => relPath(c.file)));
+    if (!mine.size) return null;
+    const hits = [];
+    for (const x of labelable()) {
+      if (x.n <= s.n) continue;
+      const files = ((x.summary || {}).changed || []).map((c) => relPath(c.file)).filter((f) => mine.has(f));
+      if (files.length) hits.push({ x, files });
+    }
+    if (!hits.length) return el('p', { class: 'help evidence' }, 'No later step changed the files from this step.');
+    const shown = hits.slice(0, 6);
+    return el('p', { class: 'help evidence' }, 'The files from this step were changed again in ',
+      shown.map((h, i) => [i ? ', ' : '', el('a', { href: stepHash(h.x, 'changes'), title: h.files.join(', ') }, `step ${h.x.n}`)]),
+      hits.length > shown.length ? ` and ${hits.length - shown.length} more` : '', '. Open them to see whether this work was kept.');
+  }
+
+  // ---------- STEPS: label panel ----------
+  function setStateBadge(b, s) {
+    const st = stepState(s);
+    b.className = 'badge ' + (st === 'done' ? 'ok' : st === 'partial' ? 'warn' : '');
+    b.textContent = st === 'done' ? 'Done' : st === 'partial' ? 'In progress' : 'Not started';
+  }
+  function renderStepLabels(s) {
+    const wrap = el('aside', { class: 'labels', 'aria-label': 'Labels for this step' });
+    const body = el('div', { class: 'labels-body' });
+    const L = labelable(), idx = L.indexOf(s);
+    if (!s.labelable) {
+      body.append(el('p', { class: 'muted' }, 'Nothing to label here. This step is shown for context.'));
+      const nx = S.steps.slice(S.steps.indexOf(s) + 1).find((x) => x.labelable);
+      wrap.append(body, el('div', { class: 'labels-foot' }, el('span', { class: 'spacer' }), nx ? el('button', { class: 'primary', onclick: () => go(stepHash(nx)) }, 'Next step') : null));
+      return wrap;
+    }
+    const badge = el('span', { id: 'stepbadge' }); setStateBadge(badge, s);
+    body.append(el('div', { class: 'labels-title' }, el('h2', {}, `Step ${s.n}`), badge, el('span', { class: 'spacer' }),
+      S.schema.guide ? el('button', { class: 'ghost sm', onclick: () => openGuide() }, 'How to label') : null));
+    const kind = trivialKind(s);
+    if (kind && !READONLY) {
+      const msg = el('span', { class: 'grow' }, kind === 'slash' ? 'This prompt is a slash command.' : 'This prompt only tells the agent to carry on.',
+        ' ', quietStep(s) ? 'The agent did almost nothing here.' : 'The agent did real work after it, so judge that work yourself.');
+      body.append(el('div', { class: 'quickfill' }, msg,
+        el('button', { class: 'sm', onclick: (e) => {
+          const filled = quickFill(s);
+          const panel = e.target.closest('.labels');
+          const fresh = renderStepLabels(s); panel.replaceWith(fresh);
+          const q = fresh.querySelector('.quickfill');
+          if (q) q.replaceChildren(el('span', { class: 'grow' }, filled.length ? 'Filled in: ' + filled.join('; ') + '. Check them before you move on.' : 'Nothing to fill: you have already answered these.'));
+        } }, 'Fill in the obvious answers')));
+    }
+    const SOURCE_HINT = { choice: 'The human picked one of the options the coding tool offered, so it was typed or clicked by the human.', paste: 'The trace shows pasted text inside this prompt.', slash: 'This is a slash command typed into the coding tool.' };
+    body.append(partFields('steps', s.id), el('div', { class: 'divider' }), partFields('prompts', s.id),
+      SOURCE_HINT[s.prompt.hint] ? el('p', { class: 'help evidence' }, 'Evidence: ' + SOURCE_HINT[s.prompt.hint]) : null);
+    const fv = { ...(S.labels[key('flags', s.id)] || {}) };
+    for (const fl of S.schema.flags || []) body.append(el('label', { class: 'flagline' },
+      el('input', { type: 'checkbox', checked: !!fv[fl.id], disabled: READONLY, onchange: (e) => { fv[fl.id] = e.target.checked; save('flags', s.id, { ...fv }); } }), fl.label));
+    const prev = idx > 0 ? L[idx - 1] : null, next = L[idx + 1];
+    const todo = L.find((x, i) => i > idx && stepState(x) !== 'done') || L.find((x) => stepState(x) !== 'done' && x !== s);
+    const foot = el('div', { class: 'labels-foot' },
+      el('button', { class: 'ghost', disabled: !prev, onclick: () => go(stepHash(prev)) }, 'Back'),
+      el('span', { class: 'spacer' }),
+      el('span', { class: 'tiny muted', title: 'j and k move between steps, n jumps to the next unfinished one. 1 to 4 answer the first question, c and u the two checkboxes, 5 to 8 who wrote the prompt. ? lists them all.' }, el('span', { class: 'kbd' }, 'j'), ' ', el('span', { class: 'kbd' }, 'k'), ' ', el('span', { class: 'kbd' }, '1-4'), ' ', el('span', { class: 'kbd' }, '?')),
+      next ? el('button', { class: 'primary', onclick: () => go(stepHash(todo && stepState(s) === 'done' ? todo : next)) }, 'Next step')
+        : el('a', { class: 'btn primary', href: '#/wrap' }, 'Go to wrap up'));
+    wrap.append(body, foot);
+    return wrap;
+  }
+
+  function partFields(pid, target) {
+    const p = part(pid), k = key(pid, target);
+    const v = { ...(S.labels[k] || {}) };
+    const box = el('div', {});
+    const redraw = (focusId) => {
+      const fresh = partFields(pid, target);
+      box.replaceWith(fresh);
+      if (focusId) { const f = fresh.querySelector(`[data-fid="${focusId}"]`); if (f) f.focus(); }
+    };
+    for (const f of p.fields) {
+      box.append(field(f, v, (x, opts = {}) => { v[f.id] = x; save(pid, target, { ...v }); if (!opts.quiet) redraw(opts.focus); }, `${pid}-${target}-${f.id}`));
+      if (pid === 'steps' && f.id === 'reverted') {
+        const s = S.steps.find((x) => x.id === target);
+        const h = s && laterChanges(s);
+        if (h) box.append(h);
+      }
+    }
+    return box;
+  }
+
+  function field(f, v, set, fid) {
+    const value = v[f.id], dis = READONLY;
+    const req = isReq(f, v);
+    const wrap = el('div', { class: 'field' });
+    const q = el('span', { class: 'q', id: fid + '-q' }, f.label.replace(/ \(required if Hurt\)/, ''), req ? el('span', { class: 'req', 'aria-hidden': 'true' }, '*') : null,
+      GUIDE_FOR[f.id] && f.type !== 'bool' ? guideLink(GUIDE_FOR[f.id]) : null);
+    if (f.type !== 'bool') wrap.append(q);
+    if (f.type === 'scale') {
+      const row = el('div', { class: 'scale', role: 'group', 'aria-labelledby': fid + '-q' });
+      for (let i = f.min; i <= f.max; i++) row.append(el('button', { 'aria-pressed': String(value === i), disabled: dis, 'data-fid': `${fid}-${i}`, title: (f.anchors || {})[i] || '', onclick: () => set(i, { focus: `${fid}-${i}` }) }, i));
+      const an = f.anchors || {};
+      wrap.append(row, el('div', { class: 'help' }, Object.entries(an).map(([k, t]) => `${k} is ${t.toLowerCase()}`).join('; ')));
+    } else if (f.type === 'choice') {
+      const short = f.options.every((o) => o.length <= 14);
+      const cls = !short ? 'seg col' : f.options.length === 4 ? 'seg wrap' : 'seg';
+      wrap.append(el('div', { class: cls, role: 'group', 'aria-labelledby': fid + '-q' }, f.options.map((o, i) => el('button', {
+        'aria-pressed': String(value === o), disabled: dis, 'data-fid': `${fid}-${i}`,
+        class: o === 'Hurt' ? 'tone-bad' : (o === 'Neutral' || o === "Can't tell") ? 'tone-neutral' : null,
+        onclick: () => set(value === o ? null : o, { focus: `${fid}-${i}` }) }, o, f.keys ? el('span', { class: 'key', 'aria-hidden': 'true' }, f.keys[i]) : null))));
+    } else if (f.type === 'multi') {
+      const cur = new Set(value || []);
+      const FEW = 6;
+      const showAll = S.showAll || f.options.slice(FEW).some((o) => cur.has(o));
+      const opts = showAll ? f.options : f.options.slice(0, FEW);
+      wrap.append(el('div', { class: 'chips', role: 'group', 'aria-labelledby': fid + '-q' }, opts.map((o) => { const i = f.options.indexOf(o); return el('button', { 'aria-pressed': String(cur.has(o)), disabled: dis, 'data-fid': `${fid}-${i}`,
+        onclick: () => { cur.has(o) ? cur.delete(o) : cur.add(o); set(f.options.filter((x) => cur.has(x)), { focus: `${fid}-${i}` }); } }, o); }),
+        !showAll ? el('button', { class: 'ghost more', onclick: () => { S.showAll = true; set(value || [], {}); } }, `+${f.options.length - FEW} more`) : null));
+    } else if (f.type === 'bool') {
+      wrap.className = 'field tight';
+      wrap.append(el('label', { class: 'toggle' }, el('input', { type: 'checkbox', checked: !!value, disabled: dis, onchange: (e) => set(e.target.checked, { quiet: true }) }), el('span', {}, f.label)));
+    } else if (f.type === 'text' && !req && !value && !(S.openNotes || new Set()).has(fid)) {
+      wrap.replaceChildren(el('button', { class: 'ghost sm addnote', disabled: dis, onclick: () => { (S.openNotes = S.openNotes || new Set()).add(fid); set(value || '', { focus: fid + '-ta' }); } }, '+ Add a note'));
+    } else if (f.type === 'text') {
+      const count = el('div', { class: 'help num' });
+      const upd = (t) => { count.textContent = f.min_chars ? `${t.trim().length} of at least ${f.min_chars} characters` : ''; };
+      const ta = el('textarea', { rows: 3, disabled: dis, 'aria-labelledby': fid + '-q', 'data-fid': fid + '-ta', autocomplete: 'off', placeholder: req ? 'Required…' : 'Optional…', oninput: (e) => { upd(e.target.value); set(e.target.value, { quiet: true }); } });
+      ta.value = value || ''; upd(ta.value);
+      wrap.append(ta, count);
+    } else if (f.type === 'step_ref') {
+      wrap.append(stepSelect(value, dis, fid + '-q', (x) => set(x, { quiet: true })));
+    } else if (f.type === 'checklist') {
+      const cur = value || {};
+      const done = f.items.filter((it) => { const a = cur[it.id] || {}; return a.answer === 'No' || (a.answer === 'Yes' && a.step); }).length;
+      if (f.help) wrap.append(el('div', { class: 'help' }, f.help));
+      const list = el('ul', { class: 'checkq', role: 'list' });
+      f.items.forEach((it, i) => {
+        const a = cur[it.id] || {};
+        const put = (patch, opts) => set({ ...cur, [it.id]: { ...a, ...patch } }, opts);
+        const qid = `${fid}-${it.id}`;
+        list.append(el('li', {}, el('span', { class: 'cq-text', id: qid }, it.label),
+          el('div', { class: 'seg', role: 'group', 'aria-labelledby': qid }, ['Yes', 'No'].map((o, j) => el('button', {
+            'aria-pressed': String(a.answer === o), disabled: dis, 'data-fid': `${qid}-${j}`,
+            onclick: () => put({ answer: a.answer === o ? null : o, step: o === 'Yes' ? a.step : null }, { focus: `${qid}-${j}` }) }, o))),
+          a.answer === 'Yes' ? el('div', { class: 'cq-step' }, stepSelect(a.step, dis, qid, (x) => put({ step: x || null }, { quiet: true }), 'Which step shows it?')) : null));
+      });
+      wrap.append(list, el('div', { class: 'help num' }, `${done} of ${f.items.length} answered`));
+    }
+    return wrap;
+  }
+
+  function stepSelect(value, dis, labelledby, onpick, first = 'Pick a step…') {
+    return el('select', { disabled: dis, 'aria-labelledby': labelledby, onchange: (e) => onpick(e.target.value) }, el('option', { value: '' }, first),
+      labelable().map((s) => el('option', { value: s.id, selected: value === s.id }, `Step ${s.n}: ${s.prompt.text.replace(/-{5}[^-]+-{5}/g, '').replace(/\s+/g, ' ').trim().slice(0, 60)}`)));
+  }
+
+  // ---------- FINAL BUILD ----------
+  const SECTIONS = [['summary', 'Summary'], ['scores', 'Scores & tests'], ['repo', 'Repository'], ['answers', 'Answers (output.csv)'], ['briefing', 'AI briefing'], ['brief', 'Task brief']];
+  function renderFinalNav(cur) {
+    return el('nav', { class: 'sidenav', 'aria-label': 'Final build' }, el('h2', {}, 'The finished build'),
+      SECTIONS.map(([id, label]) => el('a', { href: '#/final/' + id, 'aria-current': cur === id ? 'page' : null }, label)));
+  }
+  async function renderFinal(section, arg) {
+    const host = $('final');
+    let node;
+    try {
+      if (section === 'summary') node = await finalSummary();
+      else if (section === 'scores') node = finalScores();
+      else if (section === 'repo') node = finalRepo(await data('code'), arg);
+      else if (section === 'answers') node = finalAnswers(await data('output'));
+      else if (section === 'briefing') node = el('div', { class: 'pane-narrow' }, el('h1', {}, 'AI briefing'), el('div', { class: 'note warn', style: { margin: '10px 0 14px' } }, 'An AI wrote this from the repo for the judges. It can be wrong. Check claims against the code and the trace.'), renderValue(await data('context'), 0));
+      else node = el('div', { class: 'pane-narrow md' }, renderMarkdown((await data('brief')) || 'No task brief was uploaded.'));
+    } catch (e) { node = el('div', { class: 'note warn' }, 'Could not load this section: ' + e.message); }
+    if (route().mode === 'final') clear(host).append(node);
+  }
+  async function finalSummary() {
+    const b = S.build, st = b.stats || {}, out = await data('output').catch(() => null);
+    const sm = out && out.summary;
+    const first = b.sessions.map((s) => s.start).filter(Boolean).sort()[0], last = b.sessions.map((s) => s.end).filter(Boolean).sort().pop();
+    const span = first && last ? Math.round((new Date(last) - new Date(first)) / 1000) : null;
+    const box = el('div', { class: 'pane-narrow' }, el('h1', {}, `Build ${b.build_id}`), el('p', { class: 'muted', style: { marginTop: '4px' } }, b.edition || ''));
+    box.append(el('div', { class: 'tiles', style: { marginTop: '14px' } },
+      tile('Coding tool', (b.trace_tools || []).join(' and ') || 'Not available', plural(b.sessions.filter((x) => x.kind === 'main').length, 'session')),
+      tile('Steps to label', st.labelable_steps, `${st.all_steps} steps in total`),
+      tile('Tool calls', (st.tool_calls || 0).toLocaleString(), `${st.tool_errors || 0} failed, ${st.test_runs || 0} test runs`),
+      tile('Time span', span ? fmtDur(span) : 'Not available', first ? `${fmtTime(first)} to ${fmtTime(last)}` : ''),
+      tile('Repo files', st.code_files, `${st.files_touched} changed during the session`),
+      sm ? tile('Answers', sm.rows, `${sm.status_matches_majority} match the batch majority on status`) : null));
+    const models = Object.entries(b.models || {});
+    box.append(el('section', { class: 'card', style: { marginTop: '14px' } }, el('h3', { style: { marginBottom: '8px' } }, 'Tools and models'),
+      el('dl', { class: 'kv' }, el('dt', {}, 'Coding tools in the trace'), el('dd', {}, (b.trace_tools || []).join(', ') || 'Not available'),
+        el('dt', {}, 'Models'), el('dd', {}, models.length ? models.map(([m]) => m).join(', ') : 'Not available'))));
+    box.append(el('section', { class: 'section' }, el('h2', {}, 'Sessions'), el('div', { class: 'table-wrap' }, el('table', {},
+      el('thead', {}, el('tr', {}, ['Session', 'Tool', 'Kind', 'Steps', 'Started', 'Ended'].map((h) => el('th', {}, h)))),
+      el('tbody', {}, b.sessions.map((s) => el('tr', {}, el('td', {}, s.id), el('td', {}, s.tool), el('td', {}, s.kind === 'main' ? 'Main' : 'Subagent'), el('td', { class: 'num' }, s.steps), el('td', {}, fmtTime(s.start)), el('td', {}, fmtTime(s.end)))))))));
+    return box;
+  }
+  const tile = (label, value, sub) => el('div', { class: 'tile' }, el('div', { class: 'label' }, label), el('div', { class: 'value' }, value ?? 'Not available'), el('div', { class: 'sub' }, sub || ''));
+
+  function finalScores() {
+    const b = S.build, R = b.readings || [], L = labelable().length;
+    const box = el('div', { class: 'pane-narrow' }, el('h1', {}, 'Scores & tests'));
+    // Annotators never get the judges' scores (the server leaves them out). Admins reviewing a task do.
+    if (READONLY && b.scores && Object.keys(b.scores).length) {
+      box.append(el('section', { class: 'card', style: { marginTop: '14px' } }, el('h3', { style: { marginBottom: '8px' } }, 'Official judge scores'),
+        el('p', { class: 'small muted', style: { marginBottom: '8px' } }, 'Shown to reviewers only. Annotators do not see these.'),
+        el('dl', { class: 'kv' }, Object.entries(b.scores).map(([k, v]) => [el('dt', {}, k.replace(/_/g, ' ')), el('dd', { class: 'num' }, v)]))));
+    }
+    const lastTests = R.filter((r) => r.kind === 'tests' && r.source === 'measured').pop();
+    const labels = [...new Set(R.filter((r) => r.kind === 'score' && r.source === 'measured').map((r) => r.label))];
+    const finals = labels.map((l) => R.filter((r) => r.kind === 'score' && r.label === l && r.source === 'measured').pop());
+    box.append(el('section', { class: 'card' }, el('h3', { style: { marginBottom: '8px' } }, 'Last measured results'),
+      !lastTests && !finals.length ? el('p', { class: 'muted' }, 'No tests or scores were measured in this session.') :
+        el('ul', { class: 'cmdlist' },
+          lastTests ? el('li', {}, el('span', { class: 'dot ' + (lastTests.failed ? 'bad' : '') }), el('span', {}, el('b', {}, 'Tests: '), readingText(lastTests)), stepLink(lastTests)) : null,
+          finals.map((r) => el('li', {}, el('span', { class: 'dot' }), el('span', {}, el('b', {}, r.label + ': '), r.text), stepLink(r))))));
+    if (R.some((r) => r.n)) box.append(el('section', { class: 'card' }, el('h3', { style: { marginBottom: '8px' } }, 'Across the session'), chart(null, L, 180)));
+    if (R.length) {
+      box.append(el('section', { class: 'section' }, el('h2', {}, `Every reading (${R.length})`), el('p', { class: 'small muted' }, '"Measured" came from a command\'s output. "Agent claimed" came from the agent\'s own message.'),
+        el('div', { class: 'table-wrap' }, el('table', {}, el('thead', {}, el('tr', {}, ['Step', 'What', 'Value', 'Source'].map((h) => el('th', {}, h)))),
+          el('tbody', {}, R.map((r) => el('tr', {}, el('td', {}, stepLink(r)), el('td', {}, r.kind === 'tests' ? 'Tests' : r.label), el('td', { class: 'num' }, r.kind === 'tests' ? `${r.passed} passed, ${r.failed} failed` : r.text), el('td', {}, sourceBadge(r)))))))));
+    }
+    return box;
+  }
+  function stepLink(r) {
+    const s = S.steps.find((x) => x.id === r.step);
+    return s ? el('a', { href: stepHash(s, 'checks'), class: 'small' }, s.labelable ? `Step ${s.n}` : s.id) : el('span', { class: 'muted small' }, r.step || '');
+  }
+
+  function byTree(a, b) {
+    const x = a.path.split('/'), y = b.path.split('/');
+    for (let i = 0; i < Math.min(x.length, y.length); i++) {
+      const xd = i < x.length - 1, yd = i < y.length - 1;
+      if (xd !== yd) return xd ? -1 : 1;
+      if (x[i] !== y[i]) return x[i].localeCompare(y[i], undefined, { sensitivity: 'base' });
+    }
+    return x.length - y.length;
+  }
+  function finalRepo(code, sel) {
+    code = code.slice().sort(byTree);
+    const changed = code.filter((f) => f.touched_in).length;
+    const q = el('input', { type: 'search', placeholder: 'Find a file…', value: S.repoQuery, 'aria-label': 'Find a file', autocomplete: 'off', style: { width: '100%' },
+      oninput: (e) => { S.repoQuery = e.target.value; drawTree(); } });
+    const only = el('label', { class: 'small', style: { display: 'flex', gap: '6px', alignItems: 'center', margin: '8px 2px' } },
+      el('input', { type: 'checkbox', checked: S.repoChangedOnly, onchange: (e) => { S.repoChangedOnly = e.target.checked; drawTree(); } }), `Only files changed in the session (${changed})`);
+    const tree = el('div', { class: 'tree', role: 'tree', 'aria-label': 'Repository files' });
+    const view = el('div', {});
+    const dirs = (p) => p.split('/').slice(0, -1);
+    function drawTree() {
+      clear(tree);
+      const query = S.repoQuery.toLowerCase();
+      const files = code.filter((f) => (!query || f.path.toLowerCase().includes(query)) && (!S.repoChangedOnly || f.touched_in));
+      const shown = new Set();
+      for (const f of files) {
+        const d = dirs(f.path);
+        for (let i = 0; i < d.length; i++) {
+          const dp = d.slice(0, i + 1).join('/');
+          const parentOpen = i === 0 || S.openDirs.has(d.slice(0, i).join('/')) || query || S.repoChangedOnly;
+          if (!shown.has(dp) && parentOpen) {
+            shown.add(dp);
+            const open = S.openDirs.has(dp) || !!query || S.repoChangedOnly;
+            tree.append(el('button', { class: 'dir', style: { paddingLeft: (12 + i * 14) + 'px' }, 'aria-expanded': String(open),
+              onclick: () => { S.openDirs.has(dp) ? S.openDirs.delete(dp) : S.openDirs.add(dp); drawTree(); } }, (open ? '▾ ' : '▸ ') + d[i] + '/'));
+          }
+        }
+        const visible = !d.length || S.openDirs.has(d.join('/')) || query || S.repoChangedOnly;
+        if (visible) tree.append(el('button', { role: 'treeitem', 'aria-current': f.path === sel ? 'true' : null, style: { paddingLeft: (12 + d.length * 14) + 'px' },
+          onclick: () => go('#/final/repo/' + f.path.split('/').map(encodeURIComponent).join('/')) }, f.path.split('/').pop(), f.touched_in ? el('span', { class: 'chg', title: 'Changed during the session' }) : null));
+      }
+      if (!files.length) tree.append(el('p', { class: 'empty small' }, 'No files match.'));
+    }
+    const f = code.find((x) => x.path === sel);
+    if (f) { dirs(f.path).forEach((_, i, d) => S.openDirs.add(d.slice(0, i + 1).join('/'))); }
+    drawTree();
+    if (!f) view.append(el('div', { class: 'empty card' }, 'Pick a file on the left. Files with an orange dot were changed during the session.'));
+    else {
+      const head = el('div', { class: 'diff-head' }, el('span', { class: 'path' }, f.path), el('span', { class: 'spacer' }), el('span', { class: 'muted tiny num' }, `${f.size.toLocaleString()} bytes`));
+      const changedIn = f.touched_in ? el('div', { class: 'small', style: { padding: '8px 12px', borderBottom: '1px solid var(--border)' } }, 'Changed in: ',
+        f.touched_in.map((sid) => { const s = S.steps.find((x) => x.id === sid); return s ? el('a', { href: stepHash(s, 'changes'), style: { marginRight: '8px' } }, s.labelable ? `Step ${s.n}` : sid) : null; })) : null;
+      let content;
+      if (f.content === undefined) content = el('p', { class: 'empty' }, 'Not shown: ' + f.withheld + '.');
+      else {
+        const lines = f.content.split('\n').slice(0, 6000);
+        content = el('div', { class: 'code' }, el('div', { class: 'ln' }, lines.map((_, i) => i + 1).join('\n')), el('div', { class: 'src' }, lines.join('\n')));
+      }
+      view.append(el('div', { class: 'diff' }, head, changedIn, content));
+    }
+    return el('div', {}, el('div', { class: 'page-head', style: { marginBottom: '12px' } }, el('div', {}, el('h1', {}, 'Repository'), el('div', { class: 'sub' }, `The code.zip the participant submitted: ${plural(code.length, 'file')}, ${changed} changed during the session.`))),
+      el('div', { class: 'repo' }, el('div', {}, q, only, tree), view));
+  }
+
+  function finalAnswers(out) {
+    const sm = out.summary, rows = out.rows;
+    const counts = Object.entries(sm.status_counts || {});
+    const colors = { COMPLETE: 'var(--success)', INCOMPLETE: 'var(--warn)', NOT_APPLICABLE: 'var(--text-3)' };
+    const box = el('div', {}, el('h1', {}, 'Answers (output.csv)'),
+      el('p', { class: 'muted', style: { marginTop: '4px' } }, `${sm.rows} answers. "Majority" means most of the ${sm.batch_builds} builds in this batch. It is not the answer key, so disagreeing with it is not proof of an error.`));
+    box.append(el('div', { class: 'tiles', style: { margin: '14px 0' } },
+      el('div', { class: 'tile' }, el('div', { class: 'label' }, 'Statuses'), el('div', { class: 'stack', style: { margin: '10px 0 8px' } }, counts.map(([k, v]) => el('span', { style: { width: (100 * v / sm.rows) + '%', background: colors[k] || 'var(--info)' }, title: `${k}: ${v}` }))),
+        el('div', { class: 'legend' }, counts.map(([k, v]) => el('span', {}, el('i', { style: { background: colors[k] || 'var(--info)' } }), `${k.replace('_', ' ').toLowerCase()} ${v}`)))),
+      tile('Status matches majority', `${sm.status_matches_majority} of ${sm.rows}`, pct(sm.status_matches_majority / sm.rows)),
+      tile('Full plan matches majority', `${sm.plan_matches_majority} of ${sm.rows}`, pct(sm.plan_matches_majority / sm.rows))));
+    const filtered = rows.filter((r) => S.outFilter === 'all' || (S.outFilter === 'status' ? !r.status_matches_majority : !r.plan_matches_majority));
+    const per = 50, pages = Math.max(1, Math.ceil(filtered.length / per));
+    S.outPage = Math.min(S.outPage, pages - 1);
+    box.append(el('div', { class: 'toolbar' },
+      el('div', { class: 'seg', role: 'group', 'aria-label': 'Filter answers' }, [['all', 'All'], ['status', 'Status differs'], ['plan', 'Plan differs']].map(([id, l]) =>
+        el('button', { 'aria-pressed': String(S.outFilter === id), onclick: () => { S.outFilter = id; S.outPage = 0; render(); } }, l))),
+      el('span', { class: 'spacer' }), el('span', { class: 'small muted num' }, `${filtered.length} cases, page ${S.outPage + 1} of ${pages}`),
+      el('button', { class: 'sm', disabled: S.outPage === 0, onclick: () => { S.outPage--; render(); } }, 'Previous'),
+      el('button', { class: 'sm', disabled: S.outPage >= pages - 1, onclick: () => { S.outPage++; render(); } }, 'Next')));
+    const tb = el('tbody', {});
+    for (const r of filtered.slice(S.outPage * per, S.outPage * per + per)) {
+      const steps = Array.isArray(r.steps) ? r.steps : [];
+      tb.append(el('tr', {}, el('td', { class: 'mono' }, r.case_id),
+        el('td', {}, el('span', { class: 'badge ' + (r.status === 'COMPLETE' ? 'ok' : r.status === 'INCOMPLETE' ? 'warn' : '') }, r.status)),
+        el('td', {}, r.status_matches_majority ? el('span', { class: 'muted small' }, 'Same') : el('span', { class: 'small' }, 'Majority says ', el('b', {}, r.majority_status))),
+        el('td', {}, r.plan_matches_majority ? el('span', { class: 'muted small' }, 'Same') : el('span', { class: 'badge warn' }, 'Different')),
+        el('td', {}, steps.length ? el('details', {}, el('summary', { class: 'small' }, plural(r.steps_total || steps.length, 'step')),
+          el('table', { style: { marginTop: '6px' } }, el('tbody', {}, steps.map((x) => el('tr', {}, ['step_no', 'phase', 'operation', 'system_id', 'resource_id', 'state', 'evidence_id'].map((k) => el('td', { class: 'tiny mono' }, x[k] ?? '')))))),
+          r.steps_total > steps.length ? el('p', { class: 'tiny muted' }, `First ${steps.length} of ${r.steps_total} shown.`) : null) : el('span', { class: 'muted small' }, 'No steps'))));
+    }
+    box.append(el('div', { class: 'table-wrap' }, el('table', {}, el('thead', {}, el('tr', {}, ['Case', 'Status', 'Status vs majority', 'Plan vs majority', 'Plan'].map((h) => el('th', {}, h)))), tb)));
+    return box;
+  }
+
+  function renderValue(v, depth) {
+    if (v === null || v === undefined || v === '') return el('span', { class: 'muted' }, 'Not available');
+    if (typeof v !== 'object') return el('span', { class: 'prose' }, String(v));
+    if (Array.isArray(v)) {
+      if (!v.length) return el('span', { class: 'muted' }, 'None');
+      return el('ul', { style: { margin: '0', paddingLeft: '18px' } }, v.map((x) => el('li', { style: { marginBottom: '4px' } }, renderValue(x, depth + 1))));
+    }
+    if (depth === 0) return el('div', {}, Object.entries(v).map(([k, x]) => el('section', { class: 'card' }, el('h3', { style: { marginBottom: '8px' } }, k.replace(/_/g, ' ')), renderValue(x, 1))));
+    return el('dl', { class: 'kv' }, Object.entries(v).map(([k, x]) => [el('dt', {}, k.replace(/_/g, ' ')), el('dd', {}, renderValue(x, depth + 1))]));
+  }
+
+  function renderMarkdown(md) {
+    const box = el('div', {});
+    const lines = md.split('\n');
+    let i = 0;
+    const inline = (t) => t.split(/(`[^`]+`|\*\*[^*]+\*\*)/).map((p) => p.startsWith('`') && p.endsWith('`') && p.length > 1 ? el('code', {}, p.slice(1, -1))
+      : p.startsWith('**') && p.endsWith('**') && p.length > 4 ? el('b', {}, p.slice(2, -2)) : p);
+    while (i < lines.length) {
+      const l = lines[i];
+      if (l.startsWith('```')) { const buf = []; i++; while (i < lines.length && !lines[i].startsWith('```')) buf.push(lines[i++]); i++; box.append(el('pre', {}, buf.join('\n'))); continue; }
+      const h = l.match(/^(#{1,3})\s+(.*)/);
+      if (h) { box.append(el('h' + h[1].length, {}, inline(h[2]))); i++; continue; }
+      if (/^\s*\d+[.)]\s+/.test(l)) { const ol = el('ol', {}); while (i < lines.length && /^\s*\d+[.)]\s+/.test(lines[i])) ol.append(el('li', {}, inline(lines[i++].replace(/^\s*\d+[.)]\s+/, '')))); box.append(ol); continue; }
+      if (/^\s*[-*]\s+/.test(l)) { const ul = el('ul', {}); while (i < lines.length && /^\s*[-*]\s+/.test(lines[i])) ul.append(el('li', {}, inline(lines[i++].replace(/^\s*[-*]\s+/, '')))); box.append(ul); continue; }
+      if (/^\|/.test(l)) { const buf = []; while (i < lines.length && /^\|/.test(lines[i])) buf.push(lines[i++]); box.append(mdTable(buf)); continue; }
+      if (!l.trim()) { i++; continue; }
+      const buf = []; while (i < lines.length && lines[i].trim() && !/^(#|```|\||\s*[-*]\s)/.test(lines[i])) buf.push(lines[i++]);
+      box.append(el('p', {}, inline(buf.join(' '))));
+    }
+    return box;
+  }
+  // A cell that is a figure ("87%", "30/32", "1,204", "-0.5 s") is right-aligned in tabular digits.
+  const isNumeric = (c) => /^[-+~]?[$£€]?\d[\d,.]*\s*(%|\/\s*\d+|[a-z]{1,3})?$/i.test(String(c).replace(/\*\*/g, '').trim());
+  function mdTable(rows) {
+    const cells = (r) => r.replace(/^\||\|$/g, '').split('|').map((c) => c.trim());
+    const body = rows.filter((r) => !/^\|\s*-/.test(r));
+    const [head, ...rest] = body;
+    const numCol = cells(head).map((_, i) => rest.length > 0 && rest.every((r) => { const v = cells(r)[i]; return v === undefined || v === '' || isNumeric(v); }));
+    return el('div', { class: 'table-wrap', style: { margin: '8px 0 14px' } }, el('table', {}, el('thead', {}, el('tr', {}, cells(head).map((c, i) => el('th', { class: numCol[i] ? 'num' : null }, c)))),
+      el('tbody', {}, rest.map((r) => el('tr', {}, cells(r).map((c) => el('td', { class: isNumeric(c) ? 'small num' : 'small' }, c)))))));
+  }
+
+  // ---------- WRAP UP ----------
+  function renderWrap() {
+    const P = S.progress, L = labelable();
+    const pane = el('div', { class: 'pane', style: { maxWidth: '820px', margin: '0 auto', width: '100%' } });
+    pane.append(el('div', { class: 'stephead-row' }, el('h1', {}, T.wrap), el('span', { class: 'spacer' }), S.schema.guide ? el('button', { class: 'ghost sm', onclick: () => openGuide('session') }, 'How to label') : null), el('p', { class: 'muted', style: { margin: '4px 0 16px' } }, 'Grade the session as a whole and list any agent failures. ' + T.intro));
+    const item = (ok, title, sub, action) => el('li', {}, el('span', { class: 'sticon ' + (ok ? 'done' : 'todo'), 'aria-hidden': 'true' }),
+      el('div', { class: 'grow' }, el('b', {}, title), el('div', { class: 'small muted' }, sub)), action || null);
+    const todo = nextTodo();
+    pane.append(el('section', { class: 'card' }, el('ul', { class: 'checklist' },
+      item(P.session[0] === 1, 'Part 1. Session grade', P.session[0] ? 'Done' : 'Fill in the form below'),
+      item(P.steps[0] === P.steps[1], 'Part 2. Step labels', `${P.steps[0]} of ${P.steps[1]} steps answered`, todo ? el('a', { class: 'btn sm', href: stepHash(todo) }, 'Go to the next one') : null),
+      item(P.prompts[0] === P.prompts[1], 'Part 3. Prompt labels', `${P.prompts[0]} of ${P.prompts[1]} prompts answered`),
+      item(P.failures[0] === 1, 'Part 4. Agent failures', P.failures[0] ? 'Done' : 'List failures below, or tick "none found"'))));
+    const sp = part('session');
+    pane.append(el('section', { class: 'card' }, el('h2', {}, sp.title), el('p', { class: 'small muted', style: { margin: '4px 0 14px' } }, sp.help), wrapPart('session')));
+    pane.append(el('section', { class: 'card' }, failuresForm()));
+    const submitted = S.status === 'submitted';
+    pane.append(el('section', { class: 'card' }, el('div', { class: 'card-head' }, el('div', {}, el('h2', {}, submitted ? T.doneTitle : T.todoTitle),
+      el('p', { class: 'small muted', style: { marginTop: '4px' } }, submitted ? T.doneNote : S.complete ? T.readyNote : 'Finish the parts marked above first.')),
+      el('span', { class: 'spacer' }),
+      submitted ? el('span', { class: 'badge ok' }, T.doneTitle) : el('button', { class: 'primary', id: 'submitbtn', disabled: READONLY || !S.complete, onclick: submit }, T.button),
+      submitted && KIT && !REVIEWER ? el('button', { id: 'reopenbtn', onclick: reopen }, 'Reopen') : null)));
+    return pane;
+  }
+  function wrapPart(pid) {
+    const box = el('div', {});
+    const v = { ...(S.labels[key(pid, '')] || {}) };
+    for (const f of part(pid).fields) box.append(field(f, v, (x, opts = {}) => { v[f.id] = x; save(pid, '', { ...v }); if (!opts.quiet) { const fresh = wrapPart(pid); box.replaceWith(fresh); const t = opts.focus && fresh.querySelector(`[data-fid="${opts.focus}"]`); if (t) t.focus(); } }, `${pid}--${f.id}`));
+    return box;
+  }
+  function failuresForm() {
+    const p = part('failures'), k = key('failures', '');
+    const v = S.labels[k] ? JSON.parse(JSON.stringify(S.labels[k])) : { none: false, items: [] };
+    const box = el('div', {});
+    const commit = (redraw) => { save('failures', '', JSON.parse(JSON.stringify(v))); if (redraw) box.replaceWith(failuresForm()); };
+    box.append(el('h2', {}, p.title), el('p', { class: 'small muted', style: { margin: '4px 0 14px' } }, p.help));
+    const listed = new Set(v.items.map((it) => it.step_id).filter(Boolean));
+    const hurt = labelable().filter((s) => (S.labels[key('steps', s.id)] || {}).effect === 'Hurt');
+    if (hurt.length) {
+      box.append(el('div', { class: 'suggest' },
+        el('div', { class: 'who-label' }, `Steps you marked Hurt (${hurt.length})`),
+        el('p', { class: 'small muted' }, 'Start from these. Adding one copies your note; then pick the type of failure.'),
+        el('ul', { class: 'cmdlist' }, hurt.map((s) => {
+          const note = (S.labels[key('steps', s.id)] || {}).note || '';
+          const added = listed.has(s.id);
+          return el('li', {}, el('span', { class: 'dot bad', 'aria-hidden': 'true' }),
+            el('span', { class: 'cmdtext' }, el('a', { href: stepHash(s), class: 'small' }, `Step ${s.n}`), el('span', { class: 'small' }, note || el('span', { class: 'muted' }, 'No note'))),
+            READONLY ? null : added ? el('span', { class: 'badge ok' }, 'Added') : el('button', { class: 'sm', onclick: () => {
+              v.items.push({ step_id: s.id, description: note }); v.none = false; commit(true);
+            } }, 'Add as a failure'));
+        }))));
+    }
+    v.items.forEach((it, i) => {
+      const card = el('div', { class: 'card', style: { background: 'var(--raised)' } }, el('div', { class: 'card-head' }, el('b', {}, `Failure ${i + 1}`), el('span', { class: 'spacer' }),
+        READONLY ? null : el('button', { class: 'ghost sm danger', onclick: () => { v.items.splice(i, 1); commit(true); } }, 'Remove')));
+      for (const f of p.fields) card.append(field(f, it, (x, opts = {}) => { it[f.id] = x; v.none = false; commit(!opts.quiet); }, `fail-${i}-${f.id}`));
+      box.append(card);
+    });
+    if (!READONLY) box.append(el('button', { style: { margin: '10px 0' }, onclick: () => { v.items.push({}); v.none = false; S.labels[k] = v; box.replaceWith(failuresForm()); } }, '+ Add a failure'));
+    box.append(el('label', { class: 'check' }, el('input', { type: 'checkbox', checked: v.none && !v.items.length, disabled: READONLY || v.items.length > 0, onchange: (e) => { v.none = e.target.checked; commit(false); } }), el('span', {}, p.none_label)));
+    return box;
+  }
+  async function submit() {
+    if (!confirm(T.confirm)) return;
+    const b = $('submitbtn'); b.disabled = true; b.textContent = T.busy;
+    try { await api('/submit', { method: 'POST' }); location.reload(); }
+    catch (e) { b.disabled = false; b.textContent = T.button; alert(e.message); }
+  }
+  async function reopen() {
+    const b = $('reopenbtn'); b.disabled = true;
+    try { await api('/reopen', { method: 'POST' }); location.reload(); }
+    catch (e) { b.disabled = false; alert(e.message); }
+  }
+
+  // ---------- keyboard ----------
+  document.addEventListener('keydown', (e) => {
+    if (e.metaKey || e.ctrlKey || e.altKey || $('guide')) return;
+    const t = e.target;
+    if (t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || (t.tagName === 'INPUT' && !['checkbox', 'radio'].includes(t.type))) return;
+    if (e.key === '?') { e.preventDefault(); openGuide(); return; }
+    const r = route();
+    if (r.mode !== 'steps') return;
+    const L = labelable(), idx = L.indexOf(r.step);
+    if (e.key === 'j' || e.key === 'ArrowRight') { const n = L[idx + 1] || (idx < 0 ? L[0] : null); if (n) { e.preventDefault(); go(stepHash(n, r.tab)); } }
+    else if (e.key === 'k' || e.key === 'ArrowLeft') { const p = L[idx - 1]; if (p) { e.preventDefault(); go(stepHash(p, r.tab)); } }
+    else if (e.key === 'n') {
+      const todo = L.find((x, i) => i > idx && stepState(x) !== 'done') || L.find((x) => stepState(x) !== 'done' && x !== r.step);
+      if (todo) { e.preventDefault(); go(stepHash(todo, r.tab)); }
+    }
+    else if (r.step.labelable && !READONLY && (/^[1-8]$/.test(e.key) || e.key === 'c' || e.key === 'u')) {
+      e.preventDefault();
+      const set = (pid, fieldId, val) => { const v = { ...(S.labels[key(pid, r.step.id)] || {}) }; v[fieldId] = typeof val === 'function' ? val(v[fieldId]) : val; save(pid, r.step.id, v); };
+      if (/^[1-4]$/.test(e.key)) set('steps', 'effect', part('steps').fields.find((x) => x.id === 'effect').options[+e.key - 1]);
+      else if (/^[5-8]$/.test(e.key)) set('prompts', 'source', part('prompts').fields.find((x) => x.id === 'source').options[+e.key - 5]);
+      else if (e.key === 'c') set('steps', 'human_corrected', (x) => !x);
+      else if (e.key === 'u') set('steps', 'reverted', (x) => !x);
+      const panel = document.querySelector('.labels');
+      if (panel) panel.replaceWith(renderStepLabels(r.step));
+    }
+  });
+
+  // ---------- time on task ----------
+  // Counts only while the page is visible and the person did something in the last 90 seconds,
+  // per step or screen. Reports about every 30 seconds; a failed report is added to the next one.
+  function trackTime() {
+    if (READONLY) return;
+    const TICK = 5, IDLE_MS = 90000, CAP = 120;
+    let lastInput = Date.now(), total = 0, by = {}, sending = false;
+    const mark = () => { lastInput = Date.now(); };
+    for (const ev of ['pointerdown', 'pointermove', 'keydown', 'wheel', 'scroll']) window.addEventListener(ev, mark, { passive: true, capture: true });
+    setInterval(() => {
+      if (document.visibilityState !== 'visible' || Date.now() - lastInput > IDLE_MS || S.status === 'submitted' || total >= CAP) return;
+      const r = route();
+      const k = r.mode === 'steps' ? (r.step && r.step.labelable ? r.step.id : null) : r.mode;
+      total += TICK;
+      if (k) by[k] = (by[k] || 0) + TICK;
+    }, TICK * 1000);
+    async function flush(keepalive) {
+      if (!total || sending) return;
+      const body = { seconds: total, by };
+      total = 0; by = {}; sending = true;
+      try { await api('/time', { method: 'POST', body: JSON.stringify(body), keepalive }); }
+      catch (e) {  // put it back for the next report
+        total = Math.min(CAP, total + body.seconds);
+        for (const [k, x] of Object.entries(body.by)) by[k] = Math.min(CAP, (by[k] || 0) + x);
+      } finally { sending = false; }
+    }
+    setInterval(() => flush(false), 30000);
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush(true); });
+  }
+
+  // ---------- start ----------
+  (async function init() {
+    try {
+      const [schema, build, steps, lab] = await Promise.all([
+        fetch('/api/schema', { credentials: 'same-origin' }).then((r) => r.json()), data('build'), data('steps'), api('/labels')]);
+      for (const st of steps) {
+        const r = st.prompt && readableReply(st.prompt.text);
+        if (r) { st.prompt.text = r; st.prompt.hint = 'choice'; }
+      }
+      const real = (m) => m.kind !== 'tests' || m.passed + m.failed > 0;
+      build.readings = (build.readings || []).filter(real);
+      for (const st of steps) if (st.summary) st.summary.metrics = (st.summary.metrics || []).filter(real);
+      for (const st of steps) for (const a of st.actions) if (a.metrics) a.metrics = a.metrics.filter(real);
+      Object.assign(S, { schema, build, steps, progress: lab.progress, complete: lab.complete, status: lab.status });
+      for (const l of lab.labels) S.labels[key(l.part, l.target)] = l.value;
+      $('t-meta').replaceChildren(el('span', {}, (build.trace_tools || []).join(' and ')), el('span', {}, plural(labelable().length, 'step') + ' to label'));
+      render();
+      trackTime();
+    } catch (e) { clear($('mode')).append(el('div', { class: 'pane' }, el('div', { class: 'note warn' }, 'Could not load this task: ' + e.message + '. ' + T.loadHelp))); }
+  })();
+})();

@@ -1,0 +1,478 @@
+{
+  "version": "oct26-v2",
+  "intro": "One task is one build. You complete all four parts for that build. Several experts may get the same build, so work on your own and do not compare answers.",
+  "parts": [
+    {
+      "id": "session",
+      "title": "1. Session grade",
+      "scope": "build",
+      "help": "Read the whole session first. Grade the build as a whole.",
+      "fields": [
+        {
+          "id": "steering_quality",
+          "label": "How well did the human steer the AI?",
+          "type": "scale",
+          "min": 1,
+          "max": 5,
+          "anchors": {
+            "1": "No real direction",
+            "3": "Some direction, some drift",
+            "5": "Clear plan, checks and corrections"
+          },
+          "required": true
+        },
+        {
+          "id": "behaviours",
+          "type": "checklist",
+          "required": true,
+          "label": "What did the human do during the session?",
+          "help": "Answer Yes or No for each. For every Yes, pick the step that shows it best.",
+          "items": [
+            {
+              "id": "clarified_goal",
+              "label": "Made the goal clear before asking for work"
+            },
+            {
+              "id": "set_mode",
+              "label": "Said how to work, for example \"plan first\" or \"don't change code yet\""
+            },
+            {
+              "id": "gave_examples",
+              "label": "Gave examples of the output they wanted"
+            },
+            {
+              "id": "set_format",
+              "label": "Set the format or structure of the result"
+            },
+            {
+              "id": "added_context",
+              "label": "Spotted missing context and supplied it"
+            },
+            {
+              "id": "questioned_reasoning",
+              "label": "Questioned the agent's reasoning"
+            },
+            {
+              "id": "asked_approach",
+              "label": "Asked the agent which approach to take"
+            },
+            {
+              "id": "checked_claims",
+              "label": "Checked the agent's claims or results"
+            },
+            {
+              "id": "refined",
+              "label": "Refined the work over several rounds"
+            }
+          ]
+        },
+        {
+          "id": "agent_quality",
+          "label": "How well did the coding agent do the work it was asked to do?",
+          "type": "scale",
+          "min": 1,
+          "max": 5,
+          "anchors": {
+            "1": "Mostly wrong or unhelpful",
+            "3": "Mixed",
+            "5": "Accurate and efficient"
+          },
+          "required": true
+        },
+        {
+          "id": "involvement",
+          "type": "choice",
+          "required": true,
+          "label": "How was the work shared between the human and the agent?",
+          "options": [
+            "The agent did it alone",
+            "The agent led, the human checked in now and then",
+            "They shared the work equally",
+            "The human led, the agent helped",
+            "The human did most of the work"
+          ]
+        },
+        {
+          "id": "training_value",
+          "label": "Should a lab train on this session?",
+          "type": "choice",
+          "options": [
+            "Yes, as a good example",
+            "Yes, as a bad example",
+            "No"
+          ],
+          "required": true
+        },
+        {
+          "id": "rationale",
+          "label": "Why? Give 2 to 4 sentences with specific steps.",
+          "type": "text",
+          "required": true,
+          "min_chars": 60
+        },
+        {
+          "id": "confidence",
+          "type": "choice",
+          "required": true,
+          "label": "How sure are you about this session grade?",
+          "options": [
+            "Low",
+            "Medium",
+            "High"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "steps",
+      "title": "2. Step labels",
+      "scope": "step",
+      "help": "A step is one human prompt plus everything the agent did until the next prompt.",
+      "fields": [
+        {
+          "id": "effect",
+          "label": "Did this step move the build forward?",
+          "type": "choice",
+          "options": [
+            "Helped",
+            "Neutral",
+            "Hurt",
+            "Can't tell"
+          ],
+          "required": true,
+          "keys": [
+            "1",
+            "2",
+            "3",
+            "4"
+          ]
+        },
+        {
+          "id": "human_corrected",
+          "label": "The human had to correct the agent's work from this step",
+          "type": "bool"
+        },
+        {
+          "id": "reverted",
+          "label": "This step's work was undone later",
+          "type": "bool"
+        },
+        {
+          "id": "note",
+          "label": "Note (required if Hurt)",
+          "type": "text",
+          "required_if": {
+            "effect": "Hurt"
+          }
+        }
+      ]
+    },
+    {
+      "id": "prompts",
+      "title": "3. Prompt labels",
+      "scope": "prompt",
+      "help": "Label the human prompt at the top of each step.",
+      "fields": [
+        {
+          "id": "intent",
+          "label": "What is the prompt asking for? Pick all that apply.",
+          "type": "multi",
+          "required": true,
+          "min": 1,
+          "options": [
+            "Plan or design",
+            "Build a feature",
+            "Test or verify",
+            "Fix an error",
+            "Docs or packaging",
+            "Go ahead or continue",
+            "Ask a question",
+            "Push back on the AI",
+            "Limit scope",
+            "Cost or model choice",
+            "Security or secrets",
+            "About judges or scoring",
+            "Not a real prompt"
+          ]
+        },
+        {
+          "id": "source",
+          "label": "Who wrote this prompt?",
+          "type": "choice",
+          "required": true,
+          "options": [
+            "Typed by the human",
+            "Pasted from another AI",
+            "Generated by the tool or system",
+            "Can't tell"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "failures",
+      "title": "4. Agent failures",
+      "scope": "list",
+      "help": "List each clear failure by the coding agent. If there were none, tick the box.",
+      "none_label": "I reviewed the whole session and found no agent failures",
+      "fields": [
+        {
+          "id": "type",
+          "label": "Type",
+          "type": "choice",
+          "required": true,
+          "options": [
+            "Claimed a result it did not get",
+            "Ignored an instruction",
+            "Risky or destructive command",
+            "Stuck in a loop",
+            "Wrong assumption about the data",
+            "Broke working code",
+            "Overfit to samples or tests",
+            "Mishandled secrets or personal data",
+            "Other"
+          ]
+        },
+        {
+          "id": "step_id",
+          "label": "Step",
+          "type": "step_ref",
+          "required": true
+        },
+        {
+          "id": "noticed",
+          "type": "choice",
+          "required": true,
+          "label": "Did the human notice?",
+          "options": [
+            "Yes, the human caught it",
+            "No, the human missed it",
+            "Can't tell"
+          ]
+        },
+        {
+          "id": "description",
+          "label": "What happened?",
+          "type": "text",
+          "required": true,
+          "min_chars": 20
+        }
+      ]
+    }
+  ],
+  "flags": [
+    {
+      "id": "pii",
+      "label": "This step shows personal info that should have been removed"
+    }
+  ],
+  "guide": {
+    "intro": "A step is one human prompt plus everything the agent did until the next prompt. Judge each step on its own, but look at the steps after it before you decide: the next prompt often shows whether the work held up.",
+    "sections": [
+      {
+        "id": "effect",
+        "title": "Did this step move the build forward?",
+        "help": "Judge what the agent did in this step, not how well the prompt was written. Use what you can see now and in later steps.",
+        "items": [
+          {
+            "term": "Helped",
+            "text": "The build is in a better state after this step: working code was added or fixed, a real problem was found, a plan the later steps followed was agreed, or a test or evaluation told the human something new. Reading files counts as Helped only when it produced a finding that later steps used."
+          },
+          {
+            "term": "Neutral",
+            "text": "Nothing important changed: a status check, a re-run with the same result, a tool or settings command, small talk, or work that was later replaced without doing harm."
+          },
+          {
+            "term": "Hurt",
+            "text": "The step made things worse: it broke working code, added a bug, deleted or overwrote good work, chased a wrong idea that cost later steps, claimed a result it did not get, or ignored a clear instruction. Write a short note saying what went wrong."
+          },
+          {
+            "term": "Can't tell",
+            "text": "The trace does not show enough to judge: the output was cut off, the work happened outside the trace, or the prompt refers to an image that is missing."
+          }
+        ]
+      },
+      {
+        "id": "corrections",
+        "title": "Corrected and undone",
+        "items": [
+          {
+            "term": "The human had to correct the agent's work",
+            "text": "The next prompt, or a later one, points out a mistake in this step's work or asks for it to be redone. Asking for the next task is not a correction."
+          },
+          {
+            "term": "This step's work was undone later",
+            "text": "A later step removes or rewrites what this step changed. Use the hint under the question, which lists later steps that changed the same files, then open those steps' Changes tab. A small follow-up tweak is not an undo."
+          }
+        ]
+      },
+      {
+        "id": "intent",
+        "title": "What is the prompt asking for?",
+        "help": "Pick every intent the prompt really contains. Most prompts have one or two.",
+        "items": [
+          {
+            "term": "Plan or design",
+            "text": "Decide the approach, architecture, data model or order of work before building."
+          },
+          {
+            "term": "Build a feature",
+            "text": "Write or change code to add something new."
+          },
+          {
+            "term": "Test or verify",
+            "text": "Run tests or evaluations, check results, or confirm something works."
+          },
+          {
+            "term": "Fix an error",
+            "text": "Repair a specific bug, failure or wrong output."
+          },
+          {
+            "term": "Docs or packaging",
+            "text": "README, reports, logs, zips, submission files."
+          },
+          {
+            "term": "Go ahead or continue",
+            "text": "Approve the agent's plan or tell it to carry on: \"continue\", \"yes\", \"do it\"."
+          },
+          {
+            "term": "Ask a question",
+            "text": "The human wants an explanation or information, not a change."
+          },
+          {
+            "term": "Push back on the AI",
+            "text": "The human disagrees with the agent, rejects its claim or tells it that it is wrong."
+          },
+          {
+            "term": "Limit scope",
+            "text": "Narrow the work: \"only this file\", \"step 2 only\", \"don't touch tests\"."
+          },
+          {
+            "term": "Cost or model choice",
+            "text": "Which model, provider or API key to use, or how to spend less."
+          },
+          {
+            "term": "Security or secrets",
+            "text": "Keys, .env files, personal data, prompt injection."
+          },
+          {
+            "term": "About judges or scoring",
+            "text": "The hackathon's grader, rubric, leaderboard or interview."
+          },
+          {
+            "term": "Not a real prompt",
+            "text": "A slash command, an accidental message or pasted noise with no request in it."
+          }
+        ]
+      },
+      {
+        "id": "source",
+        "title": "Who wrote this prompt?",
+        "items": [
+          {
+            "term": "Typed by the human",
+            "text": "Ordinary prompts, including very short ones and answers to the agent's own questions. Logs, errors or files that the human pasted in also count, because the human chose them."
+          },
+          {
+            "term": "Pasted from another AI",
+            "text": "A long, polished spec that reads like model output: headings, numbered requirements, bold labels. The \"Contains pasted text\" marker is a hint, not proof."
+          },
+          {
+            "term": "Generated by the tool or system",
+            "text": "Text the coding tool inserted itself, such as a context summary, a hook message or skill instructions."
+          },
+          {
+            "term": "Can't tell",
+            "text": "Use this when you have no real evidence either way."
+          }
+        ]
+      },
+      {
+        "id": "trivial",
+        "title": "Trivial steps",
+        "items": [
+          {
+            "term": "Fill in the obvious answers",
+            "text": "For slash commands, \"continue\" and similar prompts, this button fills the prompt questions for you. It only fills \"Did this step help?\" when the agent did almost nothing in the step. Check what it filled before you move on; you can change any answer."
+          }
+        ]
+      },
+      {
+        "id": "session",
+        "title": "Session grade and failures",
+        "items": [
+          {
+            "term": "Steering quality",
+            "text": "How well the human directed the AI across the whole build: a clear plan, checks on results, and corrections when the agent drifted."
+          },
+          {
+            "term": "What the human did",
+            "text": "Answer Yes only when you can point to a step that shows it, and pick that step. One clear example is enough. \"Refined over several rounds\" means the human looked at a result and asked for a specific change, more than once. Plain \"continue\" prompts do not count."
+          },
+          {
+            "term": "Agent quality",
+            "text": "How well the coding agent did what it was asked, given how it was asked."
+          },
+          {
+            "term": "How the work was shared",
+            "text": "Look at who made the decisions and who wrote the code. \"The agent did it alone\": one brief, then only \"continue\". \"The human did most of the work\": the human wrote or dictated most of the code and used the agent for small jobs. Pick the middle option when neither clearly led."
+          },
+          {
+            "term": "Training value",
+            "text": "A good example shows behaviour a lab would want to copy. A bad example shows clear mistakes worth learning from. Choose No when the session is too thin, broken or noisy to teach anything."
+          },
+          {
+            "term": "Agent failures",
+            "text": "List each clear failure once, at the step where it happened. A failure is the agent's mistake, not the human's. Steps you marked Hurt are a good place to start."
+          },
+          {
+            "term": "Confidence",
+            "text": "High: you read the whole session and the grade is clear. Medium: some parts were hard to follow. Low: the trace is thin or confusing, or you are unsure about the domain. A Low answer is useful, not a mark against you."
+          },
+          {
+            "term": "Did the human notice?",
+            "text": "Yes when a later prompt points out the problem or asks for a fix. No when the session moves on as if nothing went wrong. Can't tell when the trace ends before you would know."
+          }
+        ]
+      }
+    ],
+    "examples": [
+      {
+        "title": "A slash command",
+        "prompt": "/model",
+        "what": "The tool changed its model setting. The agent did nothing else.",
+        "answer": "Neutral. Intent: Not a real prompt. Source: Typed by the human."
+      },
+      {
+        "title": "\"continue\" after real work",
+        "prompt": "continue",
+        "what": "The agent then wrote the parser and its tests, and the tests passed.",
+        "answer": "Helped: judge the work, not the one-word prompt. Intent: Go ahead or continue. Source: Typed by the human."
+      },
+      {
+        "title": "A claimed result",
+        "prompt": "run the evaluation and tell me the score",
+        "what": "The agent replied \"all 32 sample cases pass\" without running anything. The next prompt says \"you didn't actually run it\".",
+        "answer": "Hurt, with a note. The human had to correct it. Add a failure: Claimed a result it did not get."
+      },
+      {
+        "title": "A pasted spec",
+        "prompt": "A 900-word brief with headings, numbered requirements and an acceptance checklist",
+        "what": "The agent built the first module from it.",
+        "answer": "Intent: Plan or design, and Build a feature. Source: Pasted from another AI, if it reads like model output."
+      },
+      {
+        "title": "Work that was undone",
+        "prompt": "refactor the loader into classes",
+        "what": "Step 22 put the loader back the way it was because the classes broke the CLI.",
+        "answer": "Hurt, and \"undone later\" is ticked. The note says the refactor broke the CLI and was reverted in step 22."
+      },
+      {
+        "title": "An answer to the agent's question",
+        "prompt": "B",
+        "what": "Just before, the agent offered A) review the diff, B) review the plan. It then reviewed the plan.",
+        "answer": "Judge the review it did. Intent: Go ahead or continue. Source: Typed by the human."
+      }
+    ]
+  }
+}
