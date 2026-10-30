@@ -164,7 +164,7 @@
             "Inserted by the coding tool, not typed by a person",
             "Can't tell"
           ],
-          "help": "Inserted by the coding tool: text the tool added as if the human had typed it, such as the summary it writes when it compresses a long session, \"[Request interrupted by user]\", the expanded text of a slash command or skill, or hook output."
+          "help": "Usually typed by the human. Pick \"Inserted by the coding tool\" only for text the tool added itself, such as a session summary or \"[Request interrupted by user]\"."
         }
       ]
     },
@@ -341,7 +341,7 @@
       },
       {
         "id": "corrections",
-        "title": "Corrected and undone",
+        "title": "Corrections, undone work and questions",
         "items": [
           {
             "term": "The human had to correct the agent's work",
@@ -377,6 +377,29 @@
           {
             "term": "Did the human notice?",
             "text": "Yes when a later prompt points out the problem or asks for a fix. No when the session moves on as if nothing went wrong. Can't tell when the trace ends before you would know."
+          }
+        ]
+      },
+      {
+        "id": "flags",
+        "title": "Flags on each step",
+        "help": "The app adds these automatically from the trace. They point you at things worth checking; they are not answers.",
+        "items": [
+          {
+            "term": "Reported numbers to check",
+            "text": "The agent told the human a test result or score that no run before it printed. Open the Tests and scores tab to see the number and the last measured one. It may be a target, a typo, or a claim it never checked."
+          },
+          {
+            "term": "Edited test or grader files",
+            "text": "The step changed tests, evaluation or scoring code. That is often normal. It is a mistake only if the change makes the work look right without making it right."
+          },
+          {
+            "term": "Wrote an answer file directly",
+            "text": "The step wrote output.csv or expected answers by hand instead of generating them with the agent's code. Check whether that was allowed by the task."
+          },
+          {
+            "term": "% of its lines kept",
+            "text": "How many of the lines the agent added in this step are still in the final repo. A low number often means the work was later replaced."
           }
         ]
       },
