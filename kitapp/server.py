@@ -19,7 +19,7 @@ from fastapi.templating import Jinja2Templates
 
 from . import labels as L
 from . import review as R
-from .store import FILES, Store, StoreError, safe_id
+from .store import FILES, PLEDGE, Store, StoreError, safe_id
 
 HERE = os.path.dirname(__file__)
 KIT_DIR = os.environ.get('KIT_DIR', os.getcwd())
@@ -261,7 +261,7 @@ if not REVIEW:
         return RedirectResponse('/tasks?saved=1', 303)
 
     @app.get('/tasks', response_class=HTMLResponse)
-    def tasks(request: Request, exported: int = 0, saved: int = 0):
+    def tasks(request: Request, exported: int = 0, saved: int = 0, pledge: str = ''):
         u = me_or_setup()
         rows, broken = [], []
         for bid in store.task_ids():
@@ -275,14 +275,16 @@ if not REVIEW:
         last = os.path.getmtime(out) if os.path.exists(out) else None
         notices, store.notices[:] = list(store.notices), []
         return page(request, 'tasks.html', rows=rows, broken=broken, notices=notices, exported=exported, saved=saved,
-                    last_export=last, export_name=os.path.basename(out))
+                    last_export=last, export_name=os.path.basename(out), pledge_text=PLEDGE, pledge_missing=pledge == 'missing')
 
     @app.post('/export')
     async def export(request: Request):
         form = await request.form()
         check_write(request, form.get('csrf', ''))
         u = me_or_setup()
-        store.export(u.app_id, VERSION)
+        if form.get('pledge') != 'yes':
+            return RedirectResponse('/tasks?pledge=missing', 303)
+        store.export(u.app_id, VERSION, pledged=True)
         return RedirectResponse('/tasks?exported=1', 303)
 
     @app.get('/exports/{name}')

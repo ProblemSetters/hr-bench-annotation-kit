@@ -1,5 +1,6 @@
 """Review mode: read every annotator's files, check them, and compare annotators. Never writes anything."""
 import itertools
+import json
 import os
 
 from . import labels as L
@@ -46,6 +47,17 @@ def scan(store):
         if meta.get('application_id') not in (None, app_id):
             row['problems'].append(f'{META} says {meta.get("application_id")}, but the folder is {app_id}.')
         folder = os.path.join(store.ann_dir, app_id)
+        try:
+            with open(os.path.join(folder, 'manifest.json'), encoding='utf-8') as f:
+                manifest = json.load(f)
+        except (OSError, ValueError):
+            manifest = None
+        row['pledge'] = (manifest or {}).get('pledge')
+        row['exported_at'] = (manifest or {}).get('exported_at')
+        if manifest is None:
+            row['problems'].append('No export manifest in this folder, so there is no pledge. Ask for the exported zip.')
+        elif not row['pledge']:
+            row['problems'].append('The export has no pledge (made with an older kit).')
         files = sorted(f[:-5] for f in os.listdir(folder) if f.endswith('.json') and f not in (META, 'manifest.json'))
         for bid in files:
             if not safe_id(bid):

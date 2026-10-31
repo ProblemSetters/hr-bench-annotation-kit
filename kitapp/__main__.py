@@ -65,10 +65,18 @@ def main():
             return
         if not app_id:
             stop('Start the kit and fill in your details first.')
+        from .store import PLEDGE
+        print(PLEDGE)
+        try:
+            agreed = input('Type yes if this is true: ').strip().lower() == 'yes'
+        except EOFError:
+            agreed = False
+        if not agreed:
+            stop('Not exported. Export again and type yes to agree to the pledge.')
         # Safe while the kit is running: answer files are only ever replaced whole, never half-written.
         vfile = os.path.join(os.path.dirname(__file__), 'VERSION')
         try:
-            out, man = st.export(app_id, open(vfile).read().strip() if os.path.exists(vfile) else 'dev')
+            out, man = st.export(app_id, open(vfile).read().strip() if os.path.exists(vfile) else 'dev', pledged=True)
         except StoreError as e:
             stop(str(e))
         print(f'Saved {out}')

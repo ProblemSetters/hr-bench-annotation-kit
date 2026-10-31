@@ -17,6 +17,8 @@
     <dt>AI coding tools they use</dt><dd>{{ (m.ai_tools or [])|join(', ') or 'Not given' }}</dd>
     <dt>Details entered</dt><dd>{{ m.entered_at|when or 'Not recorded' }}{% if m.updated_at and m.updated_at != m.entered_at %}, last changed {{ m.updated_at|when }}{% endif %}</dd>
     <dt>Total active time</dt><dd>{{ p.secs|dur or 'None recorded' }}</dd>
+    <dt>Pledge</dt><dd>{% if p.pledge %}Agreed {{ p.pledge.agreed_at|when }}: "{{ p.pledge.text }}"{% else %}<span class="badge warn">Missing</span>{% endif %}</dd>
+    <dt>Exported</dt><dd>{{ p.exported_at|when or 'Not from an export' }}</dd>
   </dl>
 </section>
 {% if p.problems %}

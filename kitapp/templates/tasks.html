@@ -41,9 +41,13 @@
       <p class="small muted mt-4">{{ fin }} of {{ rows|length }} tasks finished.
         {% if fin < rows|length %}You can export at any time and export again later; the newest file replaces the old one.{% else %}Everything is finished. Export and send the file.{% endif %}</p>
     </div>
-    <span class="spacer"></span>
-    <form method="post" action="/export" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="{{ 'primary' if fin == rows|length else '' }}">Export my work</button></form>
   </div>
+  <form method="post" action="/export" class="export-form mt-10">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label class="check pledge"><input type="checkbox" name="pledge" value="yes" required><span>{{ pledge_text }}</span></label>
+    {% if pledge_missing %}<p class="small bad" role="alert">Tick the box above to export.</p>{% endif %}
+    <button class="{{ 'primary' if fin == rows|length else '' }}">Export my work</button>
+  </form>
   {% if last_export %}
   <div class="{{ 'note' if exported else 'export-line' }} mt-10" role="status"><span>
     {% if exported %}Exported. {% endif %}Your file is <code>exports/{{ export_name }}</code>, saved {{ last_export|ts }}.

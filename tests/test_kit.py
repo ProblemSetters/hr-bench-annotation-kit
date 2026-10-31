@@ -93,7 +93,7 @@ def test_open_page_still_saves_after_a_restart():
     h = {'X-CSRF-Token': token(c, '/label/b001')}
     _, c2 = load_app(root, 'annotate')  # the app restarts; the open page keeps its old token
     assert c2.put('/api/t/b001/labels', json={'part': 'steps', 'target': 'S1.1', 'value': {'effect': 'Helped'}}, headers=h).status_code == 200
-    assert 'kit-token' not in ''.join(zipfile.ZipFile(c2.post('/export', data={'csrf': h['X-CSRF-Token']}) and f'{root}/exports/submission_A100.zip').namelist())
+    assert 'kit-token' not in ''.join(zipfile.ZipFile(c2.post('/export', data={'csrf': h['X-CSRF-Token'], 'pledge': 'yes'}) and f'{root}/exports/submission_A100.zip').namelist())
 
 
 def test_any_application_id_and_newest_details_win():
@@ -134,12 +134,16 @@ def test_label_save_finish_reopen_and_export():
     r = c.post('/me', data={**details('A200', first_name='Ada B.'), 'csrf': token(c, '/me')})
     assert r.status_code == 303 and json.load(open(f'{root}/annotations/A100/annotator-metadata.json'))['first_name'] == 'Ada B.'
     assert not os.path.exists(f'{root}/annotations/A200')
-    assert c.post('/export', data={'csrf': token(c, '/tasks')}).status_code == 303
+    r = c.post('/export', data={'csrf': token(c, '/tasks')})
+    assert r.headers['location'] == '/tasks?pledge=missing' and not os.path.exists(f'{root}/exports/submission_A100.zip')  # no pledge, no export
+    assert 'Tick the box above to export' in c.get('/tasks?pledge=missing').text
+    assert c.post('/export', data={'csrf': token(c, '/tasks'), 'pledge': 'yes'}).headers['location'] == '/tasks?exported=1'
     z = zipfile.ZipFile(f'{root}/exports/submission_A100.zip')
     names = set(z.namelist())
     assert names == {'annotations/A100/annotator-metadata.json', 'annotations/A100/b001.json', 'annotations/A100/manifest.json'}
     man = json.loads(z.read('annotations/A100/manifest.json'))
     assert man['application_id'] == 'A100' and man['unfinished'] == ['b001', 'b002']
+    assert 'did not use ChatGPT' in man['pledge']['text'] and man['pledge']['agreed_at']
     assert c.get('/exports/submission_A100.zip').status_code == 200
     assert c.get('/exports/submission_OTHER.zip').status_code == 404
 
@@ -179,6 +183,7 @@ def test_review_mode_is_read_only_and_compares():
     home = r.get('/').text
     assert 'Ada Lovelace' in home and 'Grace Hopper' in home and 'ada@example.test' in home and 'B200' in home
     assert '+2.0' in home and '-2.0' in home  # calibration: Ada graded steering 4, Grace 2
+    assert 'No export manifest in this folder' in home  # copied by hand, not exported: no pledge
     build = r.get('/review/b/b001').text
     assert 'Behaviour checklist agreement' in build and 'Grace Hopper (B200)' in build
     assert r.get('/api/r/A100/b001/data/build').json()['scores'] == {'judge_total': 71}  # reviewers see scores

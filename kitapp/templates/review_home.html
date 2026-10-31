@@ -28,7 +28,7 @@
   <div class="card empty">No annotators yet. Unzip each submission into this kit folder: its files land in <code>annotations/&lt;application id&gt;/</code>.</div>
   {% else %}
   <div class="table-wrap"><table>
-  <thead><tr><th>Annotator</th><th>Application id</th><th>Email</th><th>Coding experience</th><th>AI tools they use</th><th>Finished</th><th class="num">Active time</th><th></th></tr></thead>
+  <thead><tr><th>Annotator</th><th>Application id</th><th>Email</th><th>Coding experience</th><th>AI tools they use</th><th>Pledge</th><th>Finished</th><th class="num">Active time</th><th></th></tr></thead>
   <tbody>
   {% for p in people %}{% set m = p.meta %}
   <tr>
@@ -37,6 +37,7 @@
     <td class="small">{{ m.email }}</td>
     <td class="small">{{ m.years_coding or 'Not given' }}</td>
     <td class="small">{{ (m.ai_tools or [])|join(', ') or 'Not given' }}</td>
+    <td>{% if p.pledge %}<span class="badge ok">Agreed</span>{% else %}<span class="badge warn">Missing</span>{% endif %}</td>
     <td>{% if p.tasks %}<div class="progress-cell"><progress max="{{ p.tasks|length }}" value="{{ p.finished }}" class="{{ 'done' if p.finished == p.tasks|length }}"></progress><span class="small num">{{ p.finished }}/{{ p.tasks|length }}</span></div>{% else %}<span class="muted small">No answer files</span>{% endif %}
       {% if p.problems %}<span class="cell-sub"><span class="badge warn">{{ p.problems|length }} {{ 'problem' if p.problems|length == 1 else 'problems' }}</span></span>{% endif %}</td>
     <td class="small num">{{ p.secs|dur }}</td>

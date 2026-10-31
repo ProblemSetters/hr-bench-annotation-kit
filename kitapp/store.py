@@ -29,6 +29,7 @@ SAFE = re.compile(r'^[A-Za-z0-9_-]{1,64}$')
 FILES = ('build', 'steps', 'code', 'output', 'context')
 META = 'annotator-metadata.json'
 FORMAT = 'hr-bench-annotation/1'
+PLEDGE = 'I labelled these builds myself. I did not use ChatGPT or any other AI tool to produce my answers.'
 KEYED = ('steps', 'prompts', 'flags')  # parts answered once per step; session and failures are answered once per build
 
 
@@ -294,9 +295,12 @@ class Store:
                 'secs': int(rec.get('active_seconds') or 0), 'rec': rec}
 
     # ---------- export ----------
-    def export(self, app_id, kit_version=''):
-        """Write exports/submission_<id>.zip: the annotator's details, every answer file and a manifest."""
+    def export(self, app_id, kit_version='', pledged=False):
+        """Write exports/submission_<id>.zip: the annotator's details, every answer file and a manifest.
+        The annotator must agree to the pledge first; the manifest records the wording and when they agreed."""
         self._writable()
+        if not pledged:
+            raise StoreError('Tick the pledge before you export.')
         with self.lock:
             folder = os.path.join(self.ann_dir, app_id)
             meta = self.meta(app_id)
@@ -316,7 +320,8 @@ class Store:
                     files[n] = 'sha256:' + hashlib.sha256(f.read()).hexdigest()
             manifest = {'format': FORMAT + '-submission', 'kit_version': kit_version, 'schema_version': L.schema()['version'],
                         'application_id': app_id, 'exported_at': now(), 'tasks': tasks,
-                        'unfinished': [t['build_id'] for t in tasks if t['status'] != 'finished'], 'files': files}
+                        'unfinished': [t['build_id'] for t in tasks if t['status'] != 'finished'], 'files': files,
+                        'pledge': {'text': PLEDGE, 'agreed_at': now()}}
             os.makedirs(self.exports_dir, exist_ok=True)
             out = os.path.join(self.exports_dir, f'submission_{app_id}.zip')
             tmp = out + f'.tmp-{os.getpid()}'
