@@ -221,7 +221,7 @@
     $('t-prog').textContent = `${doneSteps} of ${L.length} steps labelled`;
     $('t-bar').style.width = (totalUnits ? Math.round(100 * doneUnits / totalUnits) : 0) + '%';
     // The bar uses the same columns as the screen below it, so the tabs line up with the middle section.
-    root.querySelector('.taskbar').className = 'taskbar ' + (r.mode === 'steps' ? 'three' : r.mode === 'final' ? 'two' : 'one');
+    root.querySelector('.taskbar').className = 'taskbar ' + (r.mode === 'steps' || r.mode === 'brief' ? 'three' : r.mode === 'final' ? 'two' : 'one');
     const m = clear($('modes'));
     const s0 = r.mode === 'steps' ? r.step : (nextTodo() || L[0] || S.steps[0]);
     m.append(
@@ -238,6 +238,7 @@
     const r = route();
     renderTaskbar();
     const box = $('mode');
+    if (r.mode === 'steps') S.lastStep = r.step;
     if (r.mode === 'steps') {
       box.className = 'workspace';
       clear(box).append(renderRail(r.step), renderStepPane(r.step, r.tab), renderStepLabels(r.step));
@@ -252,9 +253,11 @@
       clear(box).append(renderFinalNav(r.section), el('div', { class: 'pane' }, el('div', { id: 'final' }, el('p', { class: 'muted' }, 'Loading…'))));
       renderFinal(r.section, r.arg);
     } else if (r.mode === 'brief') {
-      box.className = 'workspace one';
-      const pane = el('div', { class: 'pane', style: { maxWidth: '900px', margin: '0 auto', width: '100%' } }, el('p', { class: 'muted' }, 'Loading…'));
-      clear(box).append(pane);
+      // Same three columns as Steps: the step list on the left and the answers for the step you were on, on the right.
+      box.className = 'workspace';
+      const s = S.lastStep || nextTodo() || labelable()[0] || S.steps[0];
+      const pane = el('div', { class: 'pane calm' }, el('p', { class: 'muted' }, 'Loading…'));
+      clear(box).append(renderRail(null), pane, renderStepLabels(s));
       data('brief').then((md) => { if (route().mode === 'brief') clear(pane).append(el('h1', {}, 'Task brief'),
         el('p', { class: 'muted', style: { margin: '4px 0 18px' } }, 'The task every builder was given. Read it once before you label.'),
         el('div', { class: 'md' }, renderMarkdown(md || 'No task brief was included with these tasks.'))); });
