@@ -553,7 +553,7 @@
     const pv = { ...(S.labels[key('prompts', s.id)] || {}) };
     if (kind === 'slash' && !(pv.intent || []).length) { pv.intent = ['Not a real prompt']; filled.push('what the prompt asks for'); }
     if (!pv.source) { pv.source = 'Typed by the user'; filled.push('who wrote it'); }
-    if (!pv.reaction) { pv.reaction = kind === 'slash' ? 'Not replying to the agent (first prompt, or a new topic)' : 'Accepting it and moving on'; filled.push('what the user is doing'); }
+    if (!pv.reaction) { pv.reaction = kind === 'slash' ? 'Not replying to the agent (first prompt, or a new topic)' : 'Accepting it and moving on (ok, yes, continue)'; filled.push('what the user is doing'); }
     if (filled.length) save('prompts', s.id, pv);
     const sv = { ...(S.labels[key('steps', s.id)] || {}) };
     if (!sv.effect && quietStep(s)) { sv.effect = 'Neutral'; save('steps', s.id, sv); filled.push('Neutral, because the agent did almost nothing'); }

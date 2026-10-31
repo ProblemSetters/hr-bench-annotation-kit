@@ -1,5 +1,5 @@
 {
-  "version": "oct26-v9",
+  "version": "oct26-v10",
   "intro": "One task is one build. You complete all three parts for that build: the step labels, the prompt labels and the session grade. Several experts may get the same build, so work on your own and do not compare answers.",
   "parts": [
     {
@@ -163,13 +163,20 @@
           "required": true,
           "label": "What is the user doing with the agent's last reply?",
           "options": [
-            "Accepting it and moving on",
+            "Accepting it and moving on (ok, yes, continue)",
+            "Answering the agent's question",
+            "Questioning or checking the reply (are you sure? why? test it)",
             "Fixing something the agent got wrong",
-            "Throwing the work away",
+            "Rejecting the work (undo it, start over, try another way)",
             "Reporting an error or something broken",
-            "Asking for something new or different",
+            "Asking for the next piece of work",
             "Not replying to the agent (first prompt, or a new topic)"
-          ]
+          ],
+          "renamed": {
+            "Accepting it and moving on": "Accepting it and moving on (ok, yes, continue)",
+            "Throwing the work away": "Rejecting the work (undo it, start over, try another way)",
+            "Asking for something new or different": "Asking for the next piece of work"
+          }
         },
         {
           "id": "intent",
@@ -191,7 +198,7 @@
             "Not a real prompt"
           ],
           "optional_if": {
-            "reaction": "Accepting it and moving on"
+            "reaction": "Accepting it and moving on (ok, yes, continue)"
           }
         },
         {
@@ -507,27 +514,35 @@
       {
         "id": "reaction",
         "title": "What is the user doing with the agent's last reply?",
-        "help": "Look at the agent's final response in the step before (press k to go back), then pick the closest one.",
+        "help": "Look at the agent's final response in the step before (press k to go back), then pick the closest one. If the prompt does several things, pick the main one.",
         "items": [
           {
             "term": "Accepting it and moving on",
-            "text": "Approves the plan or tells the agent to carry on: \"continue\", \"yes\", \"looks good, next\"."
+            "text": "Approves the plan or tells the agent to carry on: \"continue\", \"yes\", \"looks good, next\". Nothing new is asked for."
+          },
+          {
+            "term": "Answering the agent's question",
+            "text": "The agent asked something in its last reply and the user answers it: \"use Postgres\", \"yes, delete it\"."
+          },
+          {
+            "term": "Questioning or checking the reply",
+            "text": "The user doubts or wants proof but doesn't say what is wrong yet: \"are you sure?\", \"why did you do that?\", \"run the tests again\"."
           },
           {
             "term": "Fixing something the agent got wrong",
             "text": "Points at a specific mistake and says how it should be."
           },
           {
-            "term": "Throwing the work away",
-            "text": "Rejects what the agent did: \"start over\", \"undo that\", \"no, not this approach\"."
+            "term": "Rejecting the work",
+            "text": "Rejects what the agent did: \"start over\", \"undo that\", \"no, try another way\"."
           },
           {
             "term": "Reporting an error or something broken",
             "text": "Pastes an error, a failing test or says something stopped working."
           },
           {
-            "term": "Asking for something new or different",
-            "text": "New or changed instructions that are not a fix of the last reply."
+            "term": "Asking for the next piece of work",
+            "text": "New work that builds on the last reply and is not a fix: \"now add the export\"."
           },
           {
             "term": "Not replying to the agent",
@@ -707,7 +722,7 @@
         "title": "An answer to the agent's question",
         "prompt": "B",
         "what": "Just before, the agent offered A) review the diff, B) review the plan. It then reviewed the plan.",
-        "answer": "Judge the review it did. In the step before, mark that the agent asked and the question was needed. Here the user is accepting the reply and moving on. Source: Typed by the user."
+        "answer": "Judge the review it did. In the step before, mark that the agent asked and the question was needed. Here the user is answering the agent's question. Source: Typed by the user."
       }
     ]
   }
