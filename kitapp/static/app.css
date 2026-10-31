@@ -88,6 +88,7 @@ code, pre, .mono { font-family: var(--mono); font-size: 12.5px; }
 .btn.sm, button.sm { min-height: 28px; padding: 0 10px; font-size: 13px; }
 button:disabled, .btn[aria-disabled="true"] { opacity: .4; cursor: not-allowed; }
 input, select, textarea { font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--control); border-radius: var(--radius-control); padding: 6px 10px; min-height: var(--control-height); }
+input[type=checkbox], input[type=radio] { min-height: 0; padding: 0; flex: none; }  /* tick boxes keep their own size so they line up with their text */
 select { background-color: var(--surface); color: var(--text); }
 input:focus-visible, select:focus-visible, textarea:focus-visible { border-color: var(--data); }
 textarea { width: 100%; resize: vertical; min-height: 76px; line-height: 1.5; }
