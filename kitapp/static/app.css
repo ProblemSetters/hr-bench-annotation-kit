@@ -258,16 +258,18 @@ tr.sel td { background: var(--raised) !important; }
 body.labeling { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
 body.labeling main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 body.labeling #app { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.taskbar { display: flex; align-items: center; gap: 24px; padding: 4px 20px 0; min-height: 52px; background: var(--frame); }
-.taskbar .title { display: flex; flex-direction: column; min-width: 0; }
-.taskbar .title b { font-size: 15px; font-weight: 600; }
-.taskbar .title .meta { display: flex; gap: 12px; font-size: 12.5px; color: var(--muted); }
-.modes { display: flex; gap: 4px; align-self: stretch; margin-left: 12px; }
+.taskbar { display: grid; grid-template-columns: 272px minmax(0, 1fr) 340px; align-items: center; padding: 0 8px 0 0; min-height: 52px; background: var(--frame); }
+.taskbar.two { grid-template-columns: 228px minmax(0, 1fr) 340px; }
+.taskbar.one { grid-template-columns: max-content minmax(0, 1fr) 340px; padding-left: 8px; }
+.taskbar .title { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 0 12px 0 24px; }
+.taskbar .title b { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.taskbar .title .meta { display: flex; gap: 8px; }
+.modes { display: flex; gap: 4px; align-self: stretch; padding-left: 28px; }
 .modes a { display: flex; align-items: center; gap: 8px; white-space: nowrap; text-decoration: none; color: var(--muted); padding: 0 12px; font-weight: 500; border-bottom: 2px solid transparent; }
 .modes a:hover { color: var(--text); }
 .modes a[aria-current="page"] { color: var(--text); border-bottom-color: var(--text); }
 .modes .n { font-size: 12px; color: var(--muted); font-weight: 400; font-variant-numeric: tabular-nums; }
-.taskprog { margin-left: auto; display: flex; align-items: center; gap: 16px; }
+.taskprog { display: flex; align-items: center; gap: 16px; padding: 0 22px; }
 .taskprog .bar { width: 140px; margin-top: 6px; }
 .savestate { font-size: 12.5px; color: var(--muted); min-width: 120px; text-align: right; }
 .savestate.bad { color: var(--negative); }
@@ -286,6 +288,7 @@ body.labeling #app { flex: 1; min-height: 0; display: flex; flex-direction: colu
 .rail-head { padding: 8px 12px 8px 16px; }
 .rail-list { position: relative; overflow: auto; flex: 1; overscroll-behavior: contain; padding: 0 8px 16px; }
 .railtabs { display: flex; gap: 2px; }
+.rail-what { margin: 6px 0 0 10px; }
 .railtabs button { border: 0; background: transparent; min-height: 28px; padding: 0 10px; font-size: 13px; color: var(--muted); font-weight: 500; }
 .railtabs button:hover { background: var(--active); color: var(--text); }
 .railtabs button[aria-pressed="true"] { background: var(--active); color: var(--text); }
@@ -448,6 +451,7 @@ time.when { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-
 .labels-title h2 { font-size: 16px; }
 .labels .field { margin-bottom: 20px; }
 .labels .field.tight { margin-bottom: 4px; }
+.labels .field.tight + .field:not(.tight) { margin-top: 16px; }
 .card .field { margin-bottom: 22px; }
 .card .field:last-child { margin-bottom: 0; }
 .field > .q { display: block; font-weight: 600; font-size: 14px; margin-bottom: 10px; line-height: 1.4; }
@@ -519,7 +523,10 @@ button.linkbtn:hover { color: var(--text); }
   .workspace > .rail { grid-column: 1 / -1; max-height: 168px; }
   .workspace > .pane { border-radius: var(--radius-sheet) 0 0 var(--radius-sheet); margin-left: 8px; }
   .pane { padding: 24px 28px 64px; }
-  .taskbar { flex-wrap: wrap; row-gap: 0; }
+  .taskbar, .taskbar.two, .taskbar.one { display: flex; flex-wrap: wrap; row-gap: 0; gap: 0 16px; padding: 4px 16px 0; }
+  .taskbar .title { padding: 0; }
+  .modes { padding-left: 0; }
+  .taskprog { margin-left: auto; padding: 0; }
 }
 @media (max-width: 760px) {
   body.labeling { height: auto; overflow: auto; }

@@ -220,13 +220,15 @@
     const doneUnits = S.progress.steps[0] + S.progress.prompts[0] + parts;
     $('t-prog').textContent = `${doneSteps} of ${L.length} steps labelled`;
     $('t-bar').style.width = (totalUnits ? Math.round(100 * doneUnits / totalUnits) : 0) + '%';
+    // The bar uses the same columns as the screen below it, so the tabs line up with the middle section.
+    root.querySelector('.taskbar').className = 'taskbar ' + (r.mode === 'steps' ? 'three' : r.mode === 'final' ? 'two' : 'one');
     const m = clear($('modes'));
     const s0 = r.mode === 'steps' ? r.step : (nextTodo() || L[0] || S.steps[0]);
     m.append(
-      el('a', { href: stepHash(s0), 'aria-current': r.mode === 'steps' ? 'page' : null }, 'Steps', el('span', { class: 'n num' }, `${doneSteps}/${L.length}`)),
+      el('a', { href: stepHash(s0), 'aria-current': r.mode === 'steps' ? 'page' : null }, 'Steps'),
       el('a', { href: '#/final/summary', 'aria-current': r.mode === 'final' ? 'page' : null }, 'Final build'),
       el('a', { href: '#/wrap', 'aria-current': r.mode === 'wrap' ? 'page' : null }, T.wrap,
-        el('span', { class: 'n' }, S.status === 'submitted' ? T.done : S.complete ? 'ready' : `${Object.values(S.progress).filter(([d, t]) => d === t).length}/${Object.keys(S.progress).length} parts`)));
+        S.status === 'submitted' ? el('span', { class: 'badge ok' }, T.doneTitle) : S.complete ? el('span', { class: 'badge ok' }, 'Ready') : null));
   }
 
   function render() {
@@ -260,7 +262,8 @@
             tests ? el('span', { class: 'mark info', title: 'Tests or scores measured' }) : null];
   }
   function renderRail(cur) {
-    const filters = [['all', 'All'], ['todo', 'To do'], ['errors', 'Errors'], ['tests', 'Tests']];
+    const filters = [['all', 'All', 'Every step'], ['todo', 'To label', 'Steps you have not finished labelling'],
+                     ['errors', 'Errors', 'Steps where a command or tool call failed'], ['tests', 'Tests', 'Steps that ran tests or measured a score']];
     const keep = (s) => S.railFilter === 'all' ? true : S.railFilter === 'todo' ? s.labelable && stepState(s) !== 'done'
       : S.railFilter === 'errors' ? (s.stats || {}).errors > 0 : ((s.summary || {}).metrics || []).length > 0 || (s.stats || {}).tests > 0;
     const list = el('div', { class: 'rail-list', role: 'list' });
@@ -281,8 +284,9 @@
     }
     if (!list.childNodes.length) list.append(el('p', { class: 'empty small' }, S.railFilter === 'todo' ? 'Every step is labelled.' : 'No steps match this filter.'));
     const tabs = el('div', { class: 'railtabs', role: 'group', 'aria-label': 'Filter steps' },
-      filters.map(([id, label]) => el('button', { 'aria-pressed': String(S.railFilter === id), onclick: () => { S.railFilter = id; render(); } }, label)));
-    return el('aside', { class: 'rail', 'aria-label': 'Steps' }, el('div', { class: 'rail-head' }, tabs), list);
+      filters.map(([id, label, tip]) => el('button', { 'aria-pressed': String(S.railFilter === id), title: tip, onclick: () => { S.railFilter = id; render(); } }, label)));
+    const what = filters.find(([id]) => id === S.railFilter)[2];
+    return el('aside', { class: 'rail', 'aria-label': 'Steps' }, el('div', { class: 'rail-head' }, tabs, el('p', { class: 'tiny muted rail-what' }, 'Showing: ' + what.toLowerCase())), list);
   }
   function refreshRailIcons() {
     document.querySelectorAll('.steprow[data-step]').forEach((row) => {
@@ -433,11 +437,10 @@
         title: `Step ${s.n}: ${what}${e ? ', has errors' : ''}${t ? ', tests or scores measured' : ''}`,
         'aria-label': `Step ${s.n}, ${what}${e ? ', has errors' : ''}` }));
     }
-    const done = L.filter((s) => stepState(s) === 'done').length;
     return el('div', {}, strip, el('div', { class: 'strip-key' },
-      el('span', {}, el('i', { style: { background: 'var(--data)' } }), `${done} labelled`),
-      el('span', {}, el('i', { style: { background: 'var(--active)' } }), `${L.length - done} to go`),
-      errs ? el('span', {}, el('i', { class: 'dot', style: { background: 'var(--negative)' } }), plural(errs, 'step') + ' with errors') : null));
+      el('span', {}, el('i', { style: { background: 'var(--data)' } }), 'Labelled'),
+      el('span', {}, el('i', { style: { background: 'var(--active)' } }), 'Not labelled yet'),
+      errs ? el('span', {}, el('i', { class: 'dot', style: { background: 'var(--negative)' } }), 'Had errors') : null));
   }
 
   function progressFold(n) {
@@ -1240,7 +1243,7 @@
       for (const st of steps) for (const a of st.actions) if (a.metrics) a.metrics = a.metrics.filter(real);
       Object.assign(S, { schema, build, steps, progress: lab.progress, complete: lab.complete, status: lab.status });
       for (const l of lab.labels) S.labels[key(l.part, l.target)] = l.value;
-      $('t-meta').replaceChildren(el('span', {}, (build.trace_tools || []).join(' and ')), el('span', {}, plural(labelable().length, 'step') + ' to label'));
+      $('t-meta').replaceChildren(el('span', { class: 'badge' }, (build.trace_tools || []).join(' and ')));
       render();
       trackTime();
     } catch (e) { clear($('mode')).append(el('div', { class: 'pane' }, el('div', { class: 'note warn' }, 'Could not load this task: ' + e.message + '. ' + T.loadHelp))); }
