@@ -763,9 +763,11 @@
     // Personal info should already be scrubbed; this is only a way to report anything that slipped through.
     const fv = { ...(S.labels[key('flags', s.id)] || {}) };
     const pii = el('p', { class: 'small report' });
-    const drawPii = () => clear(pii).append(fv.pii
-      ? [el('span', { class: 'badge warn' }, 'Personal info reported'), ' ', READONLY ? null : el('button', { class: 'linkbtn', onclick: () => { fv.pii = false; save('flags', s.id, { ...fv }); drawPii(); } }, 'Undo')]
-      : READONLY ? [] : el('button', { class: 'linkbtn', onclick: () => { fv.pii = true; save('flags', s.id, { ...fv }); drawPii(); } }, 'Report personal info in this step'));
+    const drawPii = () => append(clear(pii), fv.pii
+      ? [el('span', { class: 'badge warn' }, 'Reported: personal info in this step'), READONLY ? null : el('button', { class: 'linkbtn', onclick: () => { fv.pii = false; save('flags', s.id, { ...fv }); drawPii(); } }, 'Undo'),
+         guideLink('personal', 'What counts as personal info')]
+      : READONLY ? [] : [el('button', { class: 'linkbtn', onclick: () => { fv.pii = true; save('flags', s.id, { ...fv }); drawPii(); } }, 'Report a real name, email or key in this step'),
+         guideLink('personal', 'What counts as personal info')]);
     drawPii();
     body.append(pii);
     const prev = idx > 0 ? L[idx - 1] : null, next = L[idx + 1];

@@ -508,6 +508,21 @@
         ]
       },
       {
+        "id": "personal",
+        "title": "Report personal info",
+        "help": "Names, emails and keys should already be removed. Use the link at the bottom of the step panel if one slipped through.",
+        "items": [
+          {
+            "term": "Report it",
+            "text": "A real person's name, email, phone number or home address; a username in a file path; an API key, password or token."
+          },
+          {
+            "term": "Don't report",
+            "text": "Made-up people and emails in the task's own data (they appear in many builds), names of tools, companies or models, and text already replaced with [USER], [EMAIL], [SECRET] or [ID]."
+          }
+        ]
+      },
+      {
         "id": "trivial",
         "title": "Trivial steps",
         "items": [
