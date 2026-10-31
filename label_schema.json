@@ -46,7 +46,7 @@
             "Both",
             "Neither"
           ],
-          "help": "Look at the commands it ran and their output. An accuracy check is a script that scores the agent's answers, for example on the task's sample cases."
+          "help": "Look at the commands and their output in Agent's raw actions. An accuracy check is a script that scores the agent's answers, for example on the task's sample cases."
         },
         {
           "id": "asked",

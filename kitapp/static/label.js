@@ -389,7 +389,7 @@
     const diffs = toolActs.flatMap((a) => a.diffs || []);
 
     const tabs = [
-      ['overview', "Agent's final response", null, 'What the agent told the user at the end of the step, the files it changed and the commands it ran'],
+      ['overview', "Agent's final response", null, 'What the agent told the user at the end of the step, and the files it changed'],
       ['changes', 'Code changes', diffs.length, 'The code the agent changed in this step, file by file'],
       ['timeline', "Agent's raw actions", s.actions.length, 'Everything the agent did, in order: messages, tool calls with their output, and reasoning']];
     pane.append(el('nav', { class: 'subtabs', 'aria-label': 'Step detail' }, tabs.map(([id, label, n, tip]) =>
@@ -433,46 +433,11 @@
           el('span', { class: 'plus' }, ` +${c.added}`), el('span', { class: 'minus' }, ` −${c.removed}`))),
           sm.changed.length > 6 ? el('a', { href: stepHash(s, 'changes'), class: 'small' }, `and ${sm.changed.length - 6} more`) : null));
     }
-    const cmds = toolActs.filter((a) => a.input && a.input.command !== undefined);
-    if (cmds.length) {
-      const list = el('div', { class: 'cmds fold-body' });
-      const PAGE = 30;
-      const drawCmds = (n) => {
-        clear(list);
-        for (const a of cmds.slice(0, n)) list.append(commandRow(a));
-        if (cmds.length > n) list.append(el('button', { class: 'ghost sm', onclick: () => drawCmds(n + PAGE) }, `Show ${Math.min(PAGE, cmds.length - n)} more of ${cmds.length - n}`));
-      };
-      drawCmds(PAGE);
-      box.append(el('details', { class: 'fold mt-16', open: cmds.length <= 8 },
-        el('summary', {}, el('span', { class: 'chev', 'aria-hidden': 'true' }, '›'), ` Commands it ran (${cmds.length})`),
-        list));
-    }
     if (!toolActs.length && !sm.reply) box.append(el('p', { class: 'empty' }, 'Nothing else happened in this step.'));
-    const L = labelable(), nx = L[L.indexOf(s) + 1];
-    if (s.labelable && nx) {
-      const t = nx.prompt.text.replace(/-{5} (end of )?pasted text -{5}/g, ' ').replace(/\s+/g, ' ').trim();
-      box.append(el('div', { class: 'nextup' }, el('div', { class: 'who-label' }, 'What the user said next', timeEl(nx.ts)),
-        el('p', {}, t.slice(0, 280) + (t.length > 280 ? '\u2026' : '')),
-        el('a', { href: stepHash(nx), class: 'small' }, `Open step ${nx.n}`)));
-    } else if (s.labelable) box.append(el('div', { class: 'nextup' }, el('div', { class: 'who-label' }, 'What the user said next'), el('p', { class: 'muted' }, 'Nothing. This is the last step of the session.')));
     return box;
   }
 
-  function commandRow(a) {
-    const cmd = String(a.input.command);
-    const first = cmd.split('\n').find((l) => l.trim()) || '';
-    const lines = cmd.split('\n').length;
-    return el('details', { class: 'cmdrow' },
-      el('summary', {},
-        el('span', { class: 'dot neutral', 'aria-hidden': 'true' }),
-        timeEl(a.ts),
-        el('span', { class: 'cmdtext' }, a.input.description ? el('span', { class: 'desc' }, a.input.description) : null, el('code', {}, first)),
-        el('span', { class: 'cmdmeta' }, lines > 1 ? el('span', { class: 'muted tiny' }, `${lines} lines`) : null,
-          )),
-      el('div', { class: 'cmdbody' },
-        el('pre', {}, cmd),
-        a.output ? el('div', {}, el('div', { class: 'sublabel' }, 'Output'), el('pre', {}, a.output)) : el('p', { class: 'muted small' }, 'No output was recorded.')));
-  }
+
 
   const OPS = { edit: 'Edited', create: 'New file', write: 'Written in full', delete: 'Deleted' };
   function diffCard(d, i, total) {
