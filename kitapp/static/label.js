@@ -221,7 +221,7 @@
     $('t-prog').textContent = `${doneSteps} of ${L.length} steps labelled`;
     $('t-bar').style.width = (totalUnits ? Math.round(100 * doneUnits / totalUnits) : 0) + '%';
     // The bar uses the same columns as the screen below it, so the tabs line up with the middle section.
-    root.querySelector('.taskbar').className = 'taskbar ' + (r.mode === 'steps' || r.mode === 'brief' ? 'three' : r.mode === 'final' ? 'two' : 'one');
+    root.querySelector('.taskbar').className = 'taskbar ' + (r.mode === 'wrap' ? 'one' : 'three');
     const m = clear($('modes'));
     const s0 = r.mode === 'steps' ? r.step : (nextTodo() || L[0] || S.steps[0]);
     m.append(
@@ -249,8 +249,10 @@
         if (top < list.scrollTop + 40 || top > list.scrollTop + h - 80) list.scrollTop = Math.max(0, top - h / 3);
       }
     } else if (r.mode === 'final') {
-      box.className = 'workspace two';
-      clear(box).append(renderFinalNav(r.section), el('div', { class: 'pane' }, el('div', { id: 'final' }, el('p', { class: 'muted' }, 'Loading…'))));
+      // Same three columns as Steps and Task brief: section list left, answers for the step you were on right.
+      box.className = 'workspace final';
+      const s = S.lastStep || nextTodo() || labelable()[0] || S.steps[0];
+      clear(box).append(renderFinalNav(r.section), el('div', { class: 'pane' }, el('div', { id: 'final' }, el('p', { class: 'muted' }, 'Loading…'))), renderStepLabels(s));
       renderFinal(r.section, r.arg);
     } else if (r.mode === 'brief') {
       // Same three columns as Steps: the step list on the left and the answers for the step you were on, on the right.
@@ -994,7 +996,7 @@
     const f = code.find((x) => x.path === sel);
     if (f) { dirs(f.path).forEach((_, i, d) => S.openDirs.add(d.slice(0, i + 1).join('/'))); }
     drawTree();
-    if (!f) view.append(el('div', { class: 'empty card' }, 'Pick a file on the left. Files with an orange dot were changed during the session.'));
+    if (!f) view.append(el('div', { class: 'empty card' }, 'Pick a file on the left. Files with a green dot were changed during the session.'));
     else {
       const head = el('div', { class: 'diff-head' }, el('span', { class: 'path' }, f.path), el('span', { class: 'spacer' }), el('span', { class: 'muted tiny num' }, `${f.size.toLocaleString()} bytes`));
       const changedIn = f.touched_in ? el('div', { class: 'small', style: { padding: '8px 12px', borderBottom: '1px solid var(--border)' } }, 'Changed in: ',

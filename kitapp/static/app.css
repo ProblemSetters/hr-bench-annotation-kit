@@ -504,7 +504,7 @@ button.linkbtn:hover { color: var(--text); }
 .sidenav a:hover { background: var(--active); color: var(--text); }
 .sidenav a[aria-current="page"] { background: var(--surface); color: var(--text); border-color: var(--border); }
 .pane-narrow { max-width: 1080px; }
-.workspace.two .pane > * { max-width: none; }
+.workspace.two .pane > *, .workspace.final .pane > * { max-width: none; }
 .repo { display: grid; grid-template-columns: 290px minmax(0, 1fr); gap: var(--gap); align-items: start; }
 .tree { border: 1px solid var(--border); border-radius: var(--radius-card); max-height: calc(100vh - 260px); overflow: auto; padding: 6px 0; }
 .tree button { width: 100%; min-height: 28px; border: 0; border-radius: 0; background: transparent; justify-content: flex-start; padding: 0 12px; font-size: 12.5px; font-family: var(--mono); color: var(--muted); text-align: left; font-weight: 400; }
