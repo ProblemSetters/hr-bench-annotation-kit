@@ -146,6 +146,8 @@ def test_label_save_finish_reopen_and_export():
     assert 'did not use ChatGPT' in man['pledge']['text'] and man['pledge']['agreed_at']
     assert c.get('/exports/submission_A100.zip').status_code == 200
     assert c.get('/exports/submission_OTHER.zip').status_code == 404
+    assert c.post('/api/t/b002/time', json={'seconds': 30}, headers=h).status_code == 200
+    assert 'Not started' in c.get('/tasks').text  # opening a task and reading it doesn't start it
 
 
 def test_damaged_file_is_restored_from_backup():

@@ -279,9 +279,7 @@ class Store:
             for k, x in by.items():
                 b[k] = int(b.get(k, 0)) + x
             rec['active_seconds_by_step'] = b
-            if rec['status'] == 'not_started':
-                rec['status'] = 'in_progress'
-                rec['started_at'] = now()
+            # Reading a task doesn't start it: the status changes only when the first answer is saved (put).
             write_json(self._path(app_id, bid), rec)
             return rec
 
