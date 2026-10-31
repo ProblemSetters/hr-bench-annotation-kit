@@ -412,7 +412,8 @@
       ['checks', 'Tests and scores', checks.length + claims.length, 'Every test or evaluation it ran, and the numbers it reported'],
       ['timeline', "Agent's raw actions", s.actions.length, 'Everything the agent did, in order: messages, tool calls with their output, and reasoning']];
     pane.append(el('nav', { class: 'subtabs', 'aria-label': 'Step detail' }, tabs.map(([id, label, n, tip]) =>
-      el('a', { href: stepHash(s, id), 'aria-current': tab === id ? 'page' : null, title: tip }, label, n ? el('span', { class: 'n num' }, n) : null))));
+      el('a', { href: stepHash(s, id), 'aria-current': tab === id ? 'page' : null, title: tip }, label, n ? el('span', { class: 'n num' }, n) : null))),
+      el('p', { class: 'small muted tabnote' }, tabs.find((t) => t[0] === tab)[3] + '.'));
     const body = el('div', {});
     if (tab === 'overview') body.append(stepOverview(s, toolActs));
     if (tab === 'changes') append(body, [diffs.length ? diffs.map((d, i) => diffCard(d, i, diffs.length)) : el('p', { class: 'empty' },
