@@ -1,5 +1,5 @@
 {
-  "version": "oct26-v6",
+  "version": "oct26-v7",
   "intro": "One task is one build. You complete all three parts for that build: the step labels, the prompt labels and the session grade. Several experts may get the same build, so work on your own and do not compare answers.",
   "parts": [
     {
@@ -117,10 +117,12 @@
         {
           "id": "note",
           "type": "text",
-          "label": "Note",
-          "help": "Required when the step hurt or the agent made a mistake: say what went wrong, briefly.",
+          "label": "What went wrong?",
+          "help": "Say briefly what the agent did wrong in this step.",
           "required_if": {
-            "effect": "Hurt",
+            "failure": true
+          },
+          "show_if": {
             "failure": true
           }
         }
@@ -367,7 +369,7 @@
           },
           {
             "term": "Hurt",
-            "text": "The step made things worse: it broke working code, added a bug, deleted or overwrote good work, chased a wrong idea that cost later steps, claimed a result it did not get, or ignored a clear instruction. Write a short note saying what went wrong."
+            "text": "The step made things worse: it broke working code, added a bug, deleted or overwrote good work, chased a wrong idea that cost later steps, claimed a result it did not get, or ignored a clear instruction. If it was the agent's mistake, tick \"The agent made a mistake\" and say what went wrong."
           },
           {
             "term": "Can't tell",

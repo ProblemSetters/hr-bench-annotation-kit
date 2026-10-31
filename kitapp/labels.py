@@ -88,8 +88,8 @@ def clean_value(pid, value, step_ids):
     p = part(pid)
     out = {f['id']: _clean_field(f, value.get(f['id']), step_ids) for f in p['fields']}
     for f in p['fields']:
-        if not visible(f, out):
-            out[f['id']] = None  # for example the mistake type once "the agent made a mistake" is unticked
+        if not visible(f, out) and f['type'] != 'text':
+            out[f['id']] = None  # for example the mistake type once "the agent made a mistake" is unticked; written notes are kept
     return out
 
 
