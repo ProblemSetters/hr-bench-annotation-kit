@@ -474,14 +474,14 @@
         const cmd = a.input && a.input.command !== undefined ? String(a.input.command) : null;
         const preview = cmd ? cmd.split('\n').find((l) => l.trim()) : (a.diffs || []).length ? a.diffs.map((d) => relPath(d.file)).join(', ') : (a.input && (a.input.file_path || a.input.pattern || a.input.query)) || '';
         li = el('li', {}, el('span', { class: 'ic tool', 'aria-hidden': 'true' }, 'T'),
-          el('details', {}, el('summary', {}, el('div', { class: 'head' }, el('span', { class: 'chev', 'aria-hidden': 'true' }, '›'), el('span', { class: 'kind' }, shortTool(a.tool)), timeEl(a.ts),
+          el('details', { open: true }, el('summary', {}, el('div', { class: 'head' }, el('span', { class: 'chev', 'aria-hidden': 'true' }, '›'), el('span', { class: 'kind' }, shortTool(a.tool)), timeEl(a.ts),
             a.declined ? el('span', { class: 'badge warn' }, 'declined by the user') : null, a.blocked ? el('span', { class: 'badge' }, 'blocked by the coding tool') : null, (a.diffs || []).length ? el('span', { class: 'badge' }, plural(a.diffs.length, 'file') + ' changed') : null),
             el('span', { class: 'preview' }, preview || '')),
           el('div', { class: 'body' }, (a.diffs || []).length ? a.diffs.map((d, i) => diffCard(d, i, a.diffs.length)) : cmd !== null ? el('pre', {}, (a.input.description ? '# ' + a.input.description + '\n' : '') + cmd) : el('pre', {}, JSON.stringify(a.input || {}, null, 2)),
             a.output ? el('div', {}, el('div', { class: 'sublabel', style: { margin: '4px 0' } }, 'Output'), el('pre', {}, a.output)) : null)));
-      } else if (a.k === 'think') li = el('li', {}, el('span', { class: 'ic', 'aria-hidden': 'true' }, 'R'), el('details', {}, el('summary', {}, el('div', { class: 'head' }, el('span', { class: 'chev' }, '›'), el('span', { class: 'kind muted' }, 'Agent reasoning summary'), timeEl(a.ts))), el('div', { class: 'body' }, el('div', { class: 'prose small' }, a.text))));
+      } else if (a.k === 'think') li = el('li', {}, el('span', { class: 'ic', 'aria-hidden': 'true' }, 'R'), el('details', { open: true }, el('summary', {}, el('div', { class: 'head' }, el('span', { class: 'chev' }, '›'), el('span', { class: 'kind muted' }, 'Agent reasoning summary'), timeEl(a.ts))), el('div', { class: 'body' }, el('div', { class: 'prose small' }, a.text))));
       else if (a.k === 'interrupt') li = el('li', {}, el('span', { class: 'ic bad', 'aria-hidden': 'true' }, '!'), el('div', { class: 'head' }, el('span', { class: 'kind', style: { color: 'var(--negative)' } }, 'The user interrupted the agent'), timeEl(a.ts)));
-      else li = el('li', {}, el('span', { class: 'ic sys', 'aria-hidden': 'true' }, 'S'), el('details', {}, el('summary', {}, el('div', { class: 'head' }, el('span', { class: 'chev' }, '›'), el('span', { class: 'kind muted' }, a.text.split('\n')[0].slice(0, 120)), timeEl(a.ts))), el('div', { class: 'body' }, el('pre', {}, a.text))));
+      else li = el('li', {}, el('span', { class: 'ic sys', 'aria-hidden': 'true' }, 'S'), el('details', { open: true }, el('summary', {}, el('div', { class: 'head' }, el('span', { class: 'chev' }, '›'), el('span', { class: 'kind muted' }, a.text.split('\n')[0].slice(0, 120)), timeEl(a.ts))), el('div', { class: 'body' }, el('pre', {}, a.text))));
       ol.append(li);
     }
     return ol;
