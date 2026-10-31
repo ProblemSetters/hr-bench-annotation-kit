@@ -181,6 +181,8 @@ def build_data(bid, name, keep_scores):
     out = store.bundle(bid, name)
     if name == 'build' and not keep_scores:
         out = {k: v for k, v in out.items() if k != 'scores'}  # judges' scores would anchor the session grade
+    if name == 'context' and not keep_scores:
+        out = {}  # the AI-written repo summary made for the judges; it can be wrong and sway the grade
     return out
 
 

@@ -865,7 +865,7 @@
   }
 
   // ---------- FINAL BUILD ----------
-  const SECTIONS = [['summary', 'Summary'], ['tests', 'Tests'], ['repo', 'Repository'], ['answers', 'Answers (output.csv)'], ['briefing', 'AI briefing']];
+  const SECTIONS = [['summary', 'Summary'], ['tests', 'Tests'], ['repo', 'Repository'], ['answers', 'Answers (output.csv)']];
   function renderFinalNav(cur) {
     return el('nav', { class: 'sidenav', 'aria-label': 'Final build' }, el('h2', {}, 'The finished build'),
       SECTIONS.map(([id, label]) => el('a', { href: '#/final/' + id, 'aria-current': cur === id ? 'page' : null }, label)));
@@ -879,7 +879,6 @@
       else if (section === 'repo') node = finalRepo(await data('code'), arg);
       else if (section === 'answers') node = outcomeOpen() ? finalAnswers(await data('output'))
         : el('div', { class: 'pane-narrow' }, el('h1', {}, 'Answers (output.csv)'), el('div', { class: 'note info', style: { marginTop: '14px' } }, el('span', {}, 'The answers and how they compare with other builds appear after you finish the session grade on the Wrap up page. Judging the work first keeps the result from swaying you.')));
-      else if (section === 'briefing') node = el('div', { class: 'pane-narrow' }, el('h1', {}, 'AI briefing'), el('div', { class: 'note warn', style: { margin: '10px 0 14px' } }, 'An AI wrote this from the repo for the judges. It can be wrong. Check claims against the code and the trace.'), renderValue(await data('context'), 0));
       else node = await finalSummary();
     } catch (e) { node = el('div', { class: 'note warn' }, 'Could not load this section: ' + e.message); }
     if (route().mode === 'final') clear(host).append(node);
@@ -1039,17 +1038,6 @@
     }
     box.append(el('div', { class: 'table-wrap' }, el('table', {}, el('thead', {}, el('tr', {}, ['Case', 'Status', 'Status vs majority', 'Plan vs majority', 'Plan'].map((h) => el('th', {}, h)))), tb)));
     return box;
-  }
-
-  function renderValue(v, depth) {
-    if (v === null || v === undefined || v === '') return el('span', { class: 'muted' }, 'Not available');
-    if (typeof v !== 'object') return el('span', { class: 'prose' }, String(v));
-    if (Array.isArray(v)) {
-      if (!v.length) return el('span', { class: 'muted' }, 'None');
-      return el('ul', { style: { margin: '0', paddingLeft: '18px' } }, v.map((x) => el('li', { style: { marginBottom: '4px' } }, renderValue(x, depth + 1))));
-    }
-    if (depth === 0) return el('div', {}, Object.entries(v).map(([k, x]) => el('section', { class: 'card' }, el('h3', { style: { marginBottom: '8px' } }, k.replace(/_/g, ' ')), renderValue(x, 1))));
-    return el('dl', { class: 'kv' }, Object.entries(v).map(([k, x]) => [el('dt', {}, k.replace(/_/g, ' ')), el('dd', {}, renderValue(x, depth + 1))]));
   }
 
   function renderMarkdown(md) {
