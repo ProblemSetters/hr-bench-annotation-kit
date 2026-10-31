@@ -292,7 +292,9 @@ body.labeling #app { flex: 1; min-height: 0; display: flex; flex-direction: colu
 .railtabs button { border: 0; background: transparent; min-height: 28px; padding: 0 10px; font-size: 13px; color: var(--muted); font-weight: 500; }
 .railtabs button:hover { background: var(--active); color: var(--text); }
 .railtabs button[aria-pressed="true"] { background: var(--active); color: var(--text); }
-.rail .group { padding: 14px 8px 6px; font-size: 12px; color: var(--muted); }
+.rail .group { padding: 16px 8px 6px; font-size: 12px; color: var(--muted); display: flex; flex-direction: column; gap: 2px; }
+.rail .group b { color: var(--text); font-weight: 600; font-size: 12.5px; }
+.rail .group:first-child { padding-top: 6px; }
 .steprow { display: grid; grid-template-columns: 16px 24px 1fr auto; gap: 8px; width: 100%; text-align: left; border: 1px solid transparent; background: transparent; padding: 7px 8px; min-height: 34px; align-items: center; border-radius: var(--radius-control); font-weight: 400; justify-content: stretch; }
 .steprow:hover { background: var(--active); }
 .steprow[aria-current="true"] { background: var(--surface); border-color: var(--border); }

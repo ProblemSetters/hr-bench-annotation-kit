@@ -267,11 +267,20 @@
     const keep = (s) => S.railFilter === 'all' ? true : S.railFilter === 'todo' ? s.labelable && stepState(s) !== 'done'
       : S.railFilter === 'errors' ? (s.stats || {}).errors > 0 : ((s.summary || {}).metrics || []).length > 0 || (s.stats || {}).tests > 0;
     const list = el('div', { class: 'rail-list', role: 'list' });
+    // A build can hold several sessions: each time the builder started a new conversation with the coding tool.
     const multi = S.build.sessions.length > 1;
+    const mains = S.build.sessions.filter((x) => x.kind !== 'subagent');
     for (const sess of S.build.sessions) {
       const own = S.steps.filter((s) => s.session === sess.id && keep(s));
       if (!own.length) continue;
-      if (multi) list.append(el('div', { class: 'group' }, `${sess.tool}${sess.kind === 'subagent' ? ' (context only)' : ''}`));
+      if (multi) {
+        const nums = S.steps.filter((s) => s.session === sess.id && s.labelable).map((s) => s.n);
+        const head = sess.kind === 'subagent' ? 'Subagent (context only, not labelled)' : `Session ${mains.indexOf(sess) + 1} of ${mains.length}`;
+        const sub = [sess.tool.replace(' subagent', ''), nums.length ? (nums.length > 1 ? `steps ${nums[0]} to ${nums[nums.length - 1]}` : `step ${nums[0]}`) : 'nothing to label',
+          sess.start ? 'started ' + fmtTime(sess.start) : null].filter(Boolean).join(', ');
+        list.append(el('div', { class: 'group', title: 'The builder started a new conversation with the coding tool here. Steps are numbered across all sessions.' },
+          el('b', {}, head), el('span', { class: 'group-sub' }, sub)));
+      }
       for (const s of own) {
         const txt = s.prompt ? s.prompt.text.replace(/-{5} (end of )?pasted text -{5}/g, ' ').replace(/\s+/g, ' ').trim() : 'Agent work before the first prompt';
         list.append(el('button', { class: 'steprow' + (s.labelable ? '' : ' off'), 'aria-current': s === cur ? 'true' : null, 'data-step': s.id, role: 'listitem',
