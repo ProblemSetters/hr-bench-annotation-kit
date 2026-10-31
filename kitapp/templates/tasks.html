@@ -51,7 +51,7 @@
   {% if last_export %}
   <div class="{{ 'note' if exported else 'export-line' }} mt-10" role="status"><span>
     {% if exported %}Exported. {% endif %}Your file is <code>exports/{{ export_name }}</code>, saved {{ last_export|ts }}.
-    <a href="/exports/{{ export_name }}" download>Download it</a>, then send it the way the email asked.
+    <a href="/exports/{{ export_name }}" download>Download it</a>, then send it as requested.
   </span></div>
   {% endif %}
 </section>

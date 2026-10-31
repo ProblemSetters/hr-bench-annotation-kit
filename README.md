@@ -57,7 +57,7 @@ When all three parts of a build are done (step labels, prompt labels and the ses
 
 ## 5. Send your work
 
-On **My tasks**, tick the pledge that you did the work yourself, without ChatGPT or other AI tools, then press **Export my work**. This makes `exports/submission_<your application id>.zip`. Send that file to us as the email describes.
+On **My tasks**, tick the pledge that you did the work yourself, without ChatGPT or other AI tools, then press **Export my work**. This makes `exports/submission_<your application id>.zip`. Send that file to us as requested.
 
 You can export as often as you like. Each export replaces the previous file, so always send the newest one.
 
