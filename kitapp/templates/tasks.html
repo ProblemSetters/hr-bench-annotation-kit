@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}My tasks | HackerRank Bench annotate{% endblock %}
 {% block content %}
-<div class="page-head"><div><h1>My tasks</h1><div class="sub">Each task is one build. Label its steps, then grade the session and mark it as finished. Your work saves on this computer as you go.</div></div></div>
+<div class="page-head"><div><h1>My tasks</h1><div class="sub">Each task is one build. Label its steps, then grade the session and mark it as finished. Your work saves on your local machine itself as you go.</div></div></div>
 {% for n in notices %}<div class="note warn flash" role="status">{{ n }}</div>{% endfor %}
 {% for n in broken %}<div class="note warn flash" role="alert">{{ n }}</div>{% endfor %}
 {% if saved %}<div class="note flash" role="status">Your details are saved.</div>{% endif %}
