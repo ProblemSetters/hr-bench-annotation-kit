@@ -406,9 +406,13 @@
     const diffs = toolActs.flatMap((a) => a.diffs || []);
     const checks = toolActs.filter((a) => (a.tags || []).includes('test_or_eval') || (a.metrics || []).length);
     const claims = s.actions.filter((a) => a.k === 'msg' && (a.metrics || []).length);
-    const tabs = [['overview', 'Agent response', null], ['changes', 'Changes', diffs.length], ['checks', 'Tests and scores', checks.length + claims.length], ['timeline', 'Everything', s.actions.length]];
-    pane.append(el('nav', { class: 'subtabs', 'aria-label': 'Step detail' }, tabs.map(([id, label, n]) =>
-      el('a', { href: stepHash(s, id), 'aria-current': tab === id ? 'page' : null }, label, n ? el('span', { class: 'n num' }, n) : null))));
+    const tabs = [
+      ['overview', "Agent's final response", null, 'What the agent told the human at the end of the step, the files it changed and the commands it ran'],
+      ['changes', 'Code changes', diffs.length, 'The code the agent changed in this step, file by file'],
+      ['checks', 'Tests and scores', checks.length + claims.length, 'Every test or evaluation it ran, and the numbers it reported'],
+      ['timeline', "Agent's raw actions", s.actions.length, 'Everything the agent did, in order: messages, tool calls with their output, and reasoning']];
+    pane.append(el('nav', { class: 'subtabs', 'aria-label': 'Step detail' }, tabs.map(([id, label, n, tip]) =>
+      el('a', { href: stepHash(s, id), 'aria-current': tab === id ? 'page' : null, title: tip }, label, n ? el('span', { class: 'n num' }, n) : null))));
     const body = el('div', {});
     if (tab === 'overview') body.append(stepOverview(s, toolActs));
     if (tab === 'changes') append(body, [diffs.length ? diffs.map((d, i) => diffCard(d, i, diffs.length)) : el('p', { class: 'empty' },

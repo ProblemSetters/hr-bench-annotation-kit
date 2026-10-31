@@ -349,7 +349,7 @@
           },
           {
             "term": "This step's work was undone later",
-            "text": "A later step removes or rewrites what this step changed. Use the hint under the question, which lists later steps that changed the same files, then open those steps' Changes tab. A small follow-up tweak is not an undo."
+            "text": "A later step removes or rewrites what this step changed. Use the hint under the question, which lists later steps that changed the same files, then open those steps' Code changes tab. A small follow-up tweak is not an undo."
           },
           {
             "term": "Did the agent ask anything?",
