@@ -936,14 +936,16 @@
     const lastTests = R.filter((r) => r.kind === 'tests' && r.source === 'measured').pop();
     const labels = [...new Set(R.filter((r) => r.kind === 'score' && r.source === 'measured').map((r) => r.label))];
     const finals = labels.map((l) => R.filter((r) => r.kind === 'score' && r.label === l && r.source === 'measured').pop());
-    box.append(el('section', { class: 'card' }, el('h3', { style: { marginBottom: '8px' } }, 'Last measured results'),
+    box.append(el('section', { class: 'card' }, el('h3', { style: { marginBottom: '6px' } }, 'Last measured results'),
+      el('p', { class: 'small muted', style: { marginBottom: '10px' } },
+        'The latest number of each kind printed by a test or evaluation the builder ran, and the step it came from. These are the builder\'s own checks on the task\'s public sample cases, not the official answer key. The names come from the builder\'s script: status accuracy is usually the share of cases with the right deletion status, sequence accuracy the share with exactly the right steps, and field accuracy the share of individual fields that were right.'),
       !lastTests && !finals.length ? el('p', { class: 'muted' }, 'No tests or scores were measured in this session.') :
         el('ul', { class: 'cmdlist' },
-          lastTests ? el('li', {}, el('span', { class: 'dot ' + (lastTests.failed ? 'bad' : '') }), el('span', {}, el('b', {}, 'Tests: '), readingText(lastTests)), stepLink(lastTests)) : null,
-          finals.map((r) => el('li', {}, el('span', { class: 'dot' }), el('span', {}, el('b', {}, r.label + ': '), r.text), stepLink(r))))));
+          lastTests ? el('li', {}, el('span', { class: 'dot ' + (lastTests.failed ? 'bad' : 'neutral') }), el('span', {}, el('b', {}, 'Tests: '), readingText(lastTests)), stepLink(lastTests)) : null,
+          finals.map((r) => el('li', {}, el('span', { class: 'dot neutral' }), el('span', {}, el('b', {}, r.label[0].toUpperCase() + r.label.slice(1) + ': '), r.text), stepLink(r))))));
     if (R.some((r) => r.n)) box.append(el('section', { class: 'card' }, el('h3', { style: { marginBottom: '8px' } }, 'Across the session'), chart(null, L, 180)));
     if (R.length) {
-      box.append(el('section', { class: 'section' }, el('h2', {}, `Every reading (${R.length})`), el('p', { class: 'small muted' }, '"Measured" came from a command\'s output. "Agent claimed" came from the agent\'s own message.'),
+      box.append(el('section', { class: 'section' }, el('h2', {}, `Every reading (${R.length})`), el('p', { class: 'small muted' }, '"Measured" came from the output of a test or evaluation that actually ran. "Agent claimed" came from the agent\'s own message.'),
         el('div', { class: 'table-wrap' }, el('table', {}, el('thead', {}, el('tr', {}, ['Step', 'What', 'Value', 'Source'].map((h) => el('th', {}, h)))),
           el('tbody', {}, R.map((r) => el('tr', {}, el('td', {}, stepLink(r)), el('td', {}, r.kind === 'tests' ? 'Tests' : r.label), el('td', { class: 'num' }, r.kind === 'tests' ? `${r.passed} passed, ${r.failed} failed` : r.text), el('td', {}, sourceBadge(r)))))))));
     }
