@@ -24,6 +24,23 @@ def _clean_field(f, v, step_ids=()):
     if v is None or v == '' or v == [] or v == {}:
         return None
     t = f['type']
+    if t in ('test_result', 'percent'):
+        # {"none": true} when there was nothing to report; else the numbers the annotator read off the run
+        if not isinstance(v, dict):
+            raise ValueError(f'{f["id"]}: must be an object')
+        if v.get('none'):
+            return {'none': True}
+        def num(x, cast):
+            return None if x in (None, '') else cast(x)
+        if t == 'test_result':
+            passed, total = num(v.get('passed'), int), num(v.get('total'), int)
+            if passed is not None and passed < 0 or total is not None and total < 0 or (passed is not None and total is not None and passed > total):
+                raise ValueError(f'{f["id"]}: passed must be between 0 and the total')
+            return {'passed': passed, 'total': total} if (passed is not None or total is not None) else None
+        value = num(v.get('value'), float)
+        if value is not None and not 0 <= value <= 100:
+            raise ValueError(f'{f["id"]}: must be between 0 and 100')
+        return {'value': value} if value is not None else None
     if t == 'checklist':
         # {item_id: {"answer": "Yes" | "No", "step": step id or None}}
         if not isinstance(v, dict):
@@ -99,6 +116,10 @@ def _fields_ok(fields, v, checks=None):
         if f['type'] == 'multi' and req and len(x or []) < f.get('min', 1):
             return False
         if f['type'] == 'checklist' and req and not checklist_done(f, x):
+            return False
+        if f['type'] == 'test_result' and req and not (x.get('none') or (x.get('passed') is not None and x.get('total'))):
+            return False
+        if f['type'] == 'percent' and req and not (x.get('none') or x.get('value') is not None):
             return False
     return True
 

@@ -137,6 +137,8 @@
       if (isReq(f, v, ck) && isEmpty(x)) return false;
       if (x && f.min_chars && String(x).trim().length < f.min_chars) return false;
       if (f.type === 'checklist' && isReq(f, v) && !checklistDone(f, x)) return false;
+      if (f.type === 'test_result' && isReq(f, v, ck) && !(x && (x.none || (x.passed != null && x.total)))) return false;
+      if (f.type === 'percent' && isReq(f, v, ck) && !(x && (x.none || x.value != null))) return false;
       return true;
     });
   }
@@ -202,7 +204,7 @@
     const mode = ['brief', 'steps', 'final', 'wrap'].includes(parts[0]) ? parts[0] : 'steps';
     if (mode === 'steps') {
       const s = S.steps.find((x) => x.id === parts[1]) || nextTodo() || labelable()[0] || S.steps[0];
-      return { mode, step: s, tab: ['overview', 'changes', 'checks', 'timeline'].includes(parts[2]) ? parts[2] : 'overview' };
+      return { mode, step: s, tab: ['overview', 'changes', 'timeline'].includes(parts[2]) ? parts[2] : 'overview' };
     }
     if (mode === 'final') return { mode, section: parts[1] || 'summary', arg: parts.slice(2).join('/') };
     return { mode };
@@ -272,14 +274,12 @@
   // ---------- STEPS: rail ----------
   function stepMarks(s) {
     const st = s.stats || {}, sm = s.summary || {};
-    const tests = (sm.metrics || []).some((m) => m.source === 'measured' && m.kind === 'tests');
-    return [tests ? el('span', { class: 'mark info', title: 'Ran tests' }) : null];
+    return [];
   }
   function renderRail(cur) {
-    const filters = [['all', 'All', 'Every step'], ['todo', 'To label', 'Steps you have not finished labelling'],
-                     ['tests', 'Tests', 'Steps that ran tests']];
-    const keep = (s) => S.railFilter === 'all' ? true : S.railFilter === 'todo' ? s.labelable && stepState(s) !== 'done'
-: ((s.summary || {}).metrics || []).some((m) => m.kind === 'tests' && m.source === 'measured') || (s.stats || {}).tests > 0;
+    const filters = [['all', 'All', 'Every step'], ['todo', 'To label', 'Steps you have not finished labelling']];
+    if (!filters.some(([id]) => id === S.railFilter)) S.railFilter = 'all';
+    const keep = (s) => S.railFilter !== 'todo' || (s.labelable && stepState(s) !== 'done');
     const list = el('div', { class: 'rail-list', role: 'list' });
     // A build can hold several sessions: each time the builder started a new conversation with the coding tool.
     const multi = S.build.sessions.length > 1;
@@ -339,20 +339,6 @@
     const btn = el('button', { class: 'ghost sm', onclick: () => { const o = wrap.classList.toggle('open'); btn.textContent = o ? 'Show less' : label; } }, label);
     return el('div', {}, wrap, btn);
   }
-  // Only test runs are shown. Score names differ from build to build, so they stay in the data and feed the
-  // agent accuracy check (results the agent reported that no run backs up), but are not displayed.
-  const testReadings = () => (S.build.readings || []).filter((r) => r.kind === 'tests' && r.source === 'measured' && r.n);
-  const isTestRun = (a) => (a.tags || []).includes('test_or_eval') || (a.metrics || []).some((m) => m.kind === 'tests');
-  function measuredBefore(n) {
-    return { tests: testReadings().filter((r) => r.n <= n).pop() };
-  }
-  function readingText(m) {
-    return m.kind === 'tests' ? `${m.passed} passed${m.failed ? `, ${m.failed} failed` : ''}` : `${m.label} ${m.text}`;
-  }
-  function sourceBadge(m) {
-    return m.source === 'measured' ? el('span', { class: 'badge ok src' }, 'Measured') : el('span', { class: 'badge warn src', title: 'The agent said this in a message. Check it against a real test run.' }, 'Agent claimed');
-  }
-
   function renderStepPane(s, tab) {
     const L = labelable(), sm = s.summary || {}, st = s.stats || {};
     const sess = S.build.sessions.find((x) => x.id === s.session) || {};
@@ -385,14 +371,12 @@
 
     // one quiet line instead of a wall of tiles
     const add = (sm.changed || []).reduce((a, c) => a + c.added, 0), rem = (sm.changed || []).reduce((a, c) => a + c.removed, 0);
-    const best = (sm.metrics || []).filter((m) => m.source === 'measured' && m.kind === 'tests').pop();
     const facts = [
       s.ts ? el('time', { datetime: s.ts, title: fmtFull(s.ts) }, 'Started ' + fmtTime(s.ts)) : null,
       sm.duration_s !== null && sm.duration_s !== undefined ? el('span', {}, 'Ran ' + fmtDur(sm.duration_s)) : null,
       el('span', {}, sess.tool),
       st.tools ? el('a', { href: stepHash(s, 'timeline') }, plural(st.tools, 'tool call')) : el('span', { class: 'muted' }, 'No tool calls'),
       (sm.changed || []).length ? el('a', { href: stepHash(s, 'changes') }, plural(sm.changed.length, 'file') + ' changed ', el('span', { class: 'plus' }, `+${add}`), ' ', el('span', { class: 'minus' }, `−${rem}`)) : null,
-      best ? el('a', { href: stepHash(s, 'checks'), class: best.failed ? 'bad' : '' }, `Tests ${best.passed}/${best.passed + best.failed} passed`) : null,
       st.declined ? el('a', { href: stepHash(s, 'timeline') }, st.declined > 1 ? `Human declined ${st.declined} actions` : 'Human declined an action') : null,
       st.blocked ? el('a', { href: stepHash(s, 'timeline'), title: 'The coding tool\'s own permission check stopped the action' }, st.blocked > 1 ? `Coding tool blocked ${st.blocked} actions` : 'Coding tool blocked an action') : null,
       st.interrupts ? el('span', { class: 'bad' }, 'Interrupted') : null,
@@ -403,12 +387,10 @@
     // tabs
     const toolActs = s.actions.filter((a) => a.k === 'tool');
     const diffs = toolActs.flatMap((a) => a.diffs || []);
-    const checks = toolActs.filter(isTestRun);
-    const flagged = ((s.checks || {}).claims || []).length;
+
     const tabs = [
       ['overview', "Agent's final response", null, 'What the agent told the human at the end of the step, the files it changed and the commands it ran'],
       ['changes', 'Code changes', diffs.length, 'The code the agent changed in this step, file by file'],
-      ['checks', 'Tests', checks.length + flagged, 'Every test it ran, and any result it reported that no run backs up'],
       ['timeline', "Agent's raw actions", s.actions.length, 'Everything the agent did, in order: messages, tool calls with their output, and reasoning']];
     pane.append(el('nav', { class: 'subtabs', 'aria-label': 'Step detail' }, tabs.map(([id, label, n, tip]) =>
       el('a', { href: stepHash(s, id), 'aria-current': tab === id ? 'page' : null, title: tip }, label, n ? el('span', { class: 'n num' }, n) : null))),
@@ -417,12 +399,10 @@
     if (tab === 'overview') body.append(stepOverview(s, toolActs));
     if (tab === 'changes') append(body, [diffs.length ? diffs.map((d, i) => diffCard(d, i, diffs.length)) : el('p', { class: 'empty' },
       'No files were changed in this step.')]);
-    if (tab === 'checks') { const c = claimsBox(s); if (c) body.append(c); body.append(checksView(checks)); }
     if (tab === 'timeline') body.append(timeline(s.actions));
     pane.append(body);
 
     // where the build stood: folded away, one line when closed
-    if (s.labelable && testReadings().length) pane.append(progressFold(s.n));
     return pane;
   }
 
@@ -430,7 +410,7 @@
     const L = labelable();
     const strip = el('div', { class: 'strip', role: 'list', 'aria-label': 'Steps in this session' });
     for (const s of L) {
-      const st = stepState(s), t = ((s.summary || {}).metrics || []).some((m) => m.source === 'measured' && m.kind === 'tests');
+      const st = stepState(s), t = false;
       const what = { done: 'labelled', partial: 'partly labelled', todo: 'not labelled' }[st];
       strip.append(el('a', { href: stepHash(s, route().tab), role: 'listitem', 'aria-current': s === cur ? 'step' : null,
         class: `tick ${st}${s === cur ? ' cur' : ''}`, title: `Step ${s.n}: ${what}${t ? ', ran tests' : ''}`, 'aria-label': `Step ${s.n}, ${what}` }));
@@ -440,43 +420,6 @@
       el('span', {}, el('i', { style: { background: 'var(--active)' } }), 'Not labelled yet'),
     ));
   }
-
-  function progressFold(n) {
-    const { tests } = measuredBefore(n);
-    const summary = tests ? `last test run: ${tests.passed}/${tests.passed + tests.failed} passed` : 'no tests run yet';
-    const d = el('details', { class: 'fold' }, el('summary', {}, el('span', { class: 'chev', 'aria-hidden': 'true' }, '›'), ' Where the build stood after this step', el('span', { class: 'muted' }, `, ${summary}`)),
-      el('div', { class: 'fold-body' },
-        tests ? el('p', { class: 'small' }, `Tests: ${readingText(tests)} ${tests.n === n ? '(this step)' : `(last run in step ${tests.n})`}`) : null,
-        chart(n, labelable().length, 110), el('a', { href: '#/final/tests', class: 'small' }, 'All test runs')));
-    return d;
-  }
-
-  function chart(cur, N, H) {
-    // Marks are drawn in SVG; every label is HTML, so it keeps its size at any width.
-    const W = 680, pt = 8, pb = 8;
-    const x = (n) => (N <= 1 ? 0 : (n - 1) * W / (N - 1));
-    const y = (v) => pt + (1 - v) * (H - pt - pb);
-    const tests = testReadings().filter((r) => r.passed + r.failed > 0).map((r) => ({ n: r.n, v: r.passed / (r.passed + r.failed), t: `Step ${r.n}: ${r.passed}/${r.passed + r.failed} tests passing` }));
-    if (!tests.length) return el('p', { class: 'muted small' }, 'No tests were run.');
-    const g = svg('svg', { viewBox: `0 0 ${W} ${H}`, class: 'chart', role: 'img', 'aria-label': 'Share of tests passing across the session', preserveAspectRatio: 'none' });
-    g.style.height = H + 'px';
-    for (const v of [0, 0.5, 1]) g.append(svg('line', { x1: 0, x2: W, y1: y(v), y2: y(v), class: 'grid', 'vector-effect': 'non-scaling-stroke' }));
-    const path = (pts, cls) => pts.length > 1 && g.append(svg('polyline', { class: 'line ' + cls, points: pts.map((p) => `${x(p.n)},${y(p.v)}`).join(' ') }));
-    path(tests, 'tests');
-    if (cur) g.append(svg('line', { x1: x(cur), x2: x(cur), y1: 0, y2: H, class: 'cur', 'vector-effect': 'non-scaling-stroke' }));
-    const box = el('div', { class: 'chartbox' });
-    const plot = el('div', { style: { position: 'relative' } }, g);
-    // dots as HTML so they stay round when the plot stretches
-    const dot = (p, cls) => el('a', { href: '#', class: 'pt ' + cls, title: p.t, 'aria-label': p.t,
-      style: { left: (100 * x(p.n) / W) + '%', top: (100 * y(p.v) / H) + '%' },
-      onclick: (e) => { e.preventDefault(); const s = labelable()[p.n - 1]; if (s) go(stepHash(s, 'checks')); } });
-    tests.forEach((p) => plot.append(dot(p, 'pt-tests')));
-    for (const v of [0, 0.5, 1]) box.append(el('span', { class: 'chart-y', style: { top: (100 * y(v) / H) + '%' } }, `${v * 100}%`));
-    box.append(plot);
-    const legend = el('div', { class: 'legend' }, el('span', {}, el('i', { style: { background: 'var(--info)' } }), 'Share of tests passing in each test run'));
-    return el('div', {}, box, el('div', { class: 'chart-x' }, el('span', {}, 'Step 1'), cur ? el('span', {}, `You are on step ${cur}`) : null, el('span', {}, `Step ${N}`)), legend);
-  }
-
 
   function stepOverview(s, toolActs) {
     const sm = s.summary || {}, box = el('div', { class: 'overview' });
@@ -525,7 +468,7 @@
         timeEl(a.ts),
         el('span', { class: 'cmdtext' }, a.input.description ? el('span', { class: 'desc' }, a.input.description) : null, el('code', {}, first)),
         el('span', { class: 'cmdmeta' }, lines > 1 ? el('span', { class: 'muted tiny' }, `${lines} lines`) : null,
-          a.result ? el('span', { class: 'badge info' }, a.result) : null)),
+          )),
       el('div', { class: 'cmdbody' },
         el('pre', {}, cmd),
         a.output ? el('div', {}, el('div', { class: 'sublabel' }, 'Output'), el('pre', {}, a.output)) : el('p', { class: 'muted small' }, 'No output was recorded.')));
@@ -552,36 +495,9 @@
   function checkFacts(s) {
     const ck = s.checks || {};
     const out = [];
-    if ((ck.claims || []).length) out.push(el('a', { href: stepHash(s, 'checks'), class: 'flag warn' }, plural(ck.claims.length, 'reported result') + ' to check'));
-    if ((ck.test_edits || []).length) out.push(el('a', { href: stepHash(s, 'changes'), class: 'flag', title: ck.test_edits.map(relPath).join(', ') }, 'Edited test or grader files'));
-    if ((ck.answer_edits || []).length) out.push(el('a', { href: stepHash(s, 'changes'), class: 'flag warn', title: ck.answer_edits.map(relPath).join(', ') }, 'Wrote an answer file directly'));
     if (ck.lines_added >= 10) out.push(el('span', { title: 'Share of the lines the agent added in this step that are still in the final repo' }, `${Math.round(100 * ck.lines_kept / ck.lines_added)}% of its lines kept`));
     return out;
   }
-  // A reported result without the builder's metric name: "29/32" or "5 passed, 0 failed".
-  const bare = (t) => !t ? t : /passed/.test(t) ? t : t.split(' ').pop();
-  function claimsBox(s) {
-    const cl = (s.checks || {}).claims || [];
-    if (!cl.length) return null;
-    return el('section', { class: 'card claimsbox' }, el('h3', {}, 'Agent accuracy check'),
-      el('p', { class: 'small muted' }, 'At the end of this step the agent reported these results, but no test or evaluation run before it shows the same number. It may be a target, a typo, or a claim it never checked.'),
-      el('ul', { class: 'cmdlist' }, cl.map((c) => el('li', {}, el('span', { class: 'dot warn', 'aria-hidden': 'true' }),
-        el('span', { class: 'cmdtext' }, el('b', {}, 'Reported ' + bare(c.claim)), el('span', { class: 'small muted' }, c.last_measured ? `The last run before it showed ${bare(c.last_measured)}.` : 'No run before this point showed it.'))))));
-  }
-
-  function checksView(checks) {
-    const box = el('div', {});
-    if (!checks.length) return el('div', { class: 'empty card' }, 'No tests were run in this step.');
-    for (const a of checks) {
-      box.append(el('section', { class: 'card' },
-        el('div', { class: 'card-head' }, el('span', { class: 'dot neutral', style: { marginTop: 0 } }), el('h3', {}, 'Test run'), timeEl(a.ts),
-          (a.metrics || []).filter((m) => m.kind === 'tests').map((m) => el('span', { class: 'badge ' + (m.failed ? 'bad' : 'ok') }, readingText(m)))),
-        el('pre', {}, (a.input && a.input.command) || JSON.stringify(a.input, null, 2)),
-        a.output ? el('details', { style: { marginTop: '8px' } }, el('summary', { class: 'small' }, 'Output'), el('pre', { style: { marginTop: '6px' } }, a.output)) : null));
-    }
-    return box;
-  }
-
   function timeline(actions) {
     if (!actions.length) return el('div', { class: 'empty card' }, 'No agent actions were recorded for this step.');
     const ol = el('ol', { class: 'tl' });
@@ -594,7 +510,7 @@
         const preview = cmd ? cmd.split('\n').find((l) => l.trim()) : (a.diffs || []).length ? a.diffs.map((d) => relPath(d.file)).join(', ') : (a.input && (a.input.file_path || a.input.pattern || a.input.query)) || '';
         li = el('li', {}, el('span', { class: 'ic tool', 'aria-hidden': 'true' }, 'T'),
           el('details', {}, el('summary', {}, el('div', { class: 'head' }, el('span', { class: 'chev', 'aria-hidden': 'true' }, '›'), el('span', { class: 'kind' }, shortTool(a.tool)), timeEl(a.ts),
-            a.result ? el('span', { class: 'badge info' }, a.result) : null, a.declined ? el('span', { class: 'badge warn' }, 'declined by the human') : null, a.blocked ? el('span', { class: 'badge' }, 'blocked by the coding tool') : null, (a.diffs || []).length ? el('span', { class: 'badge' }, plural(a.diffs.length, 'file') + ' changed') : null),
+            a.declined ? el('span', { class: 'badge warn' }, 'declined by the human') : null, a.blocked ? el('span', { class: 'badge' }, 'blocked by the coding tool') : null, (a.diffs || []).length ? el('span', { class: 'badge' }, plural(a.diffs.length, 'file') + ' changed') : null),
             el('span', { class: 'preview' }, preview || '')),
           el('div', { class: 'body' }, (a.diffs || []).length ? a.diffs.map((d, i) => diffCard(d, i, a.diffs.length)) : cmd !== null ? el('pre', {}, (a.input.description ? '# ' + a.input.description + '\n' : '') + cmd) : el('pre', {}, JSON.stringify(a.input || {}, null, 2)),
             a.output ? el('div', {}, el('div', { class: 'sublabel', style: { margin: '4px 0' } }, 'Output'), el('pre', {}, a.output)) : null)));
@@ -819,6 +735,16 @@
       wrap.append(ta, count);
     } else if (f.type === 'step_ref') {
       wrap.append(stepSelect(value, dis, fid + '-q', (x) => set(x, { quiet: true })));
+    } else if (f.type === 'test_result' || f.type === 'percent') {
+      // numbers the annotator reads off the last run, or "none"; typing saves without redrawing so focus stays put
+      const cur = { ...(value || {}) };
+      const num = (k, attrs) => el('input', { type: 'number', min: 0, step: f.type === 'percent' ? 'any' : 1, max: attrs.max, class: 'numin', disabled: dis || !!cur.none,
+        value: cur[k] ?? '', 'aria-label': attrs.label, oninput: (e) => { cur[k] = e.target.value === '' ? null : Number(e.target.value); set({ passed: cur.passed, total: cur.total, value: cur.value }, { quiet: true }); } });
+      const row = f.type === 'test_result'
+        ? el('div', { class: 'numrow' }, num('passed', { label: 'Tests passed' }), el('span', {}, 'passed of'), num('total', { label: 'Total tests' }))
+        : el('div', { class: 'numrow' }, num('value', { max: 100, label: 'Accuracy in percent' }), el('span', {}, '%'));
+      wrap.append(row, el('label', { class: 'check', style: { marginTop: '6px' } }, el('input', { type: 'checkbox', checked: !!cur.none, disabled: dis,
+        onchange: (e) => set(e.target.checked ? { none: true } : null, {}) }), el('span', {}, f.none_label)));
     } else if (f.type === 'checklist') {
       const cur = value || {};
       const done = f.items.filter((it) => { const a = cur[it.id] || {}; return a.answer === 'No' || (a.answer === 'Yes' && a.step); }).length;
@@ -845,7 +771,7 @@
   }
 
   // ---------- FINAL BUILD ----------
-  const SECTIONS = [['summary', 'Summary'], ['tests', 'Tests'], ['repo', 'Repository'], ['answers', 'Answers (output.csv)']];
+  const SECTIONS = [['summary', 'Summary'], ['repo', 'Repository'], ['answers', 'Answers (output.csv)']];
   function renderFinalNav(cur) {
     return el('nav', { class: 'sidenav', 'aria-label': 'Final build' }, el('h2', {}, 'The finished build'),
       SECTIONS.map(([id, label]) => el('a', { href: '#/final/' + id, 'aria-current': cur === id ? 'page' : null }, label)));
@@ -855,7 +781,6 @@
     let node;
     try {
       if (section === 'summary') node = await finalSummary();
-      else if (section === 'tests' || section === 'scores') node = finalTests();
       else if (section === 'repo') node = finalRepo(await data('code'), arg);
       else if (section === 'answers') node = outcomeOpen() ? finalAnswers(await data('output'))
         : el('div', { class: 'pane-narrow' }, el('h1', {}, 'Answers (output.csv)'), el('div', { class: 'note info', style: { marginTop: '14px' } }, el('span', {}, 'The answers and how they compare with other builds appear after you finish the session grade on the Wrap up page. Judging the work first keeps the result from swaying you.')));
@@ -872,7 +797,7 @@
     box.append(el('div', { class: 'tiles', style: { marginTop: '14px' } },
       tile('Coding tool', (b.trace_tools || []).join(' and ') || 'Not available', plural(b.sessions.filter((x) => x.kind === 'main').length, 'session')),
       tile('Steps to label', st.labelable_steps, `${st.all_steps} steps in total`),
-      tile('Tool calls', (st.tool_calls || 0).toLocaleString(), `${st.test_runs || 0} test runs`),
+      tile('Tool calls', (st.tool_calls || 0).toLocaleString(), ''),
       tile('Time span', span ? fmtDur(span) : 'Not available', first ? `${fmtTime(first)} to ${fmtTime(last)}` : ''),
       tile('Repo files', st.code_files, `${st.files_touched} changed during the session`),
       sm && outcomeOpen() ? tile('Answers', sm.rows, `${sm.status_matches_majority} match the batch majority on status`) : null,
@@ -889,39 +814,9 @@
   }
   const tile = (label, value, sub) => el('div', { class: 'tile' }, el('div', { class: 'label' }, label), el('div', { class: 'value' }, value ?? 'Not available'), el('div', { class: 'sub' }, sub || ''));
 
-  function finalTests() {
-    const b = S.build, T = testReadings();
-    const box = el('div', { class: 'pane-narrow' }, el('h1', {}, 'Tests'));
-    // Annotators never get the judges' scores (the server leaves them out). Admins reviewing a task do.
-    if (READONLY && b.scores && Object.keys(b.scores).length) {
-      box.append(el('section', { class: 'card', style: { marginTop: '14px' } }, el('h3', { style: { marginBottom: '8px' } }, 'Official judge scores'),
-        el('p', { class: 'small muted', style: { marginBottom: '8px' } }, 'Shown to reviewers only. Annotators do not see these.'),
-        el('dl', { class: 'kv' }, Object.entries(b.scores).map(([k, v]) => [el('dt', {}, k.replace(/_/g, ' ')), el('dd', { class: 'num' }, v)]))));
-    }
-    box.append(el('p', { class: 'muted', style: { margin: '6px 0 14px' } }, 'The test runs in this session, and the results the agent reported that no run backs up.'));
-    const last = T[T.length - 1];
-    box.append(last ? el('section', { class: 'card runcard' },
-      el('div', { class: 'card-head' }, el('h3', {}, 'Last test run'), el('span', { class: 'spacer' }), stepLink(last)),
-      last.cmd ? el('pre', { class: 'runcmd' }, last.cmd) : null, el('p', { class: last.failed ? 'bad' : '' }, readingText(last)))
-      : el('div', { class: 'card empty' }, 'The agent did not run any tests in this session.'));
-    if (T.length) box.append(el('section', { class: 'card' }, el('h3', { style: { marginBottom: '8px' } }, 'Across the session'), chart(null, labelable().length, 180)));
-    const flagged = labelable().flatMap((s) => ((s.checks || {}).claims || []).map((c) => ({ s, c })));
-    box.append(el('section', { class: 'card claimsbox' }, el('h3', { style: { marginBottom: '6px' } }, 'Agent accuracy check'),
-      el('p', { class: 'small muted', style: { marginBottom: '10px' } }, 'Results the agent reported to the human that no test or evaluation run before it shows. Open the step to judge whether it misled the human.'),
-      flagged.length ? el('ul', { class: 'cmdlist' }, flagged.map(({ s, c }) => el('li', {}, el('span', { class: 'dot warn', 'aria-hidden': 'true' }),
-        el('span', { class: 'cmdtext' }, el('b', {}, 'Reported ' + bare(c.claim)), el('span', { class: 'small muted' }, c.last_measured ? `The last run before it showed ${bare(c.last_measured)}.` : 'No run before this point showed it.')),
-        el('a', { href: stepHash(s, 'checks'), class: 'small' }, `Step ${s.n}`))))
-        : el('p', { class: 'muted small' }, 'Every result the agent reported matches a run before it.')));
-    if (T.length > 1) box.append(el('section', { class: 'section' }, el('h2', {}, `Every test run (${T.length})`),
-      el('div', { class: 'table-wrap' }, el('table', {}, el('thead', {}, el('tr', {}, ['Step', 'Command', 'Result'].map((h) => el('th', {}, h)))),
-        el('tbody', {}, T.map((r) => el('tr', {}, el('td', {}, stepLink(r)), el('td', { class: 'mono small' }, r.cmd || ''), el('td', { class: 'num nowrap ' + (r.failed ? 'bad' : '') }, readingText(r)))))))));
-    return box;
-  }
 
-  function stepLink(r) {
-    const s = S.steps.find((x) => x.id === r.step);
-    return s ? el('a', { href: stepHash(s, 'checks'), class: 'small' }, s.labelable ? `Step ${s.n}` : s.id) : el('span', { class: 'muted small' }, r.step || '');
-  }
+
+
 
   function byTree(a, b) {
     const x = a.path.split('/'), y = b.path.split('/');
@@ -1099,12 +994,8 @@
     const box = el('div', { class: 'card outcome' }, el('h3', {}, 'The result'), el('p', { class: 'muted small' }, 'Loading…'));
     data('output').then((out) => {
       const sm = (out || {}).summary || {}, c = S.build.checks || {};
-      const R = (S.build.readings || []).filter((r) => r.source === 'measured');
-      const lastTests = R.filter((r) => r.kind === 'tests').pop();
       clear(box).append(el('h3', {}, 'The result'), el('ul', { class: 'cmdlist' },
         sm.rows ? el('li', {}, el('span', { class: 'dot' }), el('span', {}, `Answers: ${sm.status_matches_majority} of ${sm.rows} match most other builds on status, ${sm.plan_matches_majority} on the deletion plan`)) : null,
-        lastTests ? el('li', {}, el('span', { class: 'dot ' + (lastTests.failed ? 'bad' : '') }), el('span', {}, `Last measured tests: ${lastTests.passed} passed, ${lastTests.failed} failed`)) : null,
-        c.claims_flagged ? el('li', {}, el('span', { class: 'dot warn' }), el('span', {}, `${plural(c.claims_flagged, 'reported result')} that no run backs up (agent accuracy check)`)) : null,
         c.agent_lines_added ? el('li', {}, el('span', { class: 'dot' }), el('span', {}, `${Math.round(100 * c.agent_lines_kept / c.agent_lines_added)}% of the code the agent added is in the final repo`)) : null),
         el('p', { class: 'small muted' }, 'Most other builds is a comparison with this batch, not the official answer key.'));
     }).catch(() => clear(box).append(el('h3', {}, 'The result'), el('p', { class: 'muted small' }, 'Could not load the result.')));
@@ -1122,15 +1013,6 @@
           el('span', { class: 'small' }, (v.failure_types || []).join(', ') || el('span', { class: 'muted' }, 'Type not picked yet')),
           el('span', { class: 'small muted' }, [v.noticed, v.note].filter(Boolean).join('. '))));
     })) : el('p', { class: 'muted small' }, 'No mistakes marked on any step.'));
-    const flagged = labelable().flatMap((s) => ((s.checks || {}).claims || []).map((c) => ({ s, c })))
-      .filter(({ s }) => !(S.labels[key('steps', s.id)] || {}).failure);
-    if (flagged.length) {
-      box.append(el('div', { class: 'suggest', style: { marginTop: '14px' } },
-        el('div', { class: 'who-label' }, `Agent accuracy check: results it reported that no run backs up (${flagged.length})`),
-        el('p', { class: 'small muted' }, 'Check these before you answer "Did the claims match?". If one misled the human, mark a mistake on that step.'),
-        el('ul', { class: 'cmdlist' }, flagged.slice(0, 20).map(({ s, c }) => el('li', {}, el('span', { class: 'dot warn', 'aria-hidden': 'true' }),
-          el('span', { class: 'cmdtext' }, el('a', { href: stepHash(s, 'checks'), class: 'small' }, `Step ${s.n}`), el('span', { class: 'small' }, `Reported ${bare(c.claim)}${c.last_measured ? '; the last run before it showed ' + bare(c.last_measured) : ''}`)))))));
-    }
     return box;
   }
   async function submit() {
