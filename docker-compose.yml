@@ -5,6 +5,8 @@ services:
     build: .
     image: hr-bench-annotation-kit
     command: ["python", "-m", "kitapp", "${KIT_MODE:-annotate}"]
+    environment:
+      KIT_PUBLIC_PORT: "${KIT_PORT:-8790}"   # only for the "Open http://localhost:..." message
     ports:
       - "127.0.0.1:${KIT_PORT:-8790}:8790"   # reachable from this computer only
     volumes:

@@ -92,7 +92,8 @@ def main():
         stop(f'Port {a.port} is already in use. Close whatever is using it, or start the kit with --port {a.port + 1}.')
     shown = 'localhost' if a.host in ('127.0.0.1', '0.0.0.0', '::1') else a.host
     print(f'\nHackerRank Bench annotate is running{" in review mode (read only)" if a.command == "review" else ""}.')
-    print(f'Open http://{shown}:{a.port} in your browser. Press Ctrl+C to stop.\n', flush=True)
+    public = os.environ.get('KIT_PUBLIC_PORT') or a.port  # under Docker the app listens on 8790 inside; this is the port on the computer
+    print(f'Open http://{shown}:{public} in your browser. Press Ctrl+C to stop.\n', flush=True)
     import uvicorn
     try:
         uvicorn.run('kitapp.server:app', host=a.host, port=a.port, log_level='warning', timeout_graceful_shutdown=5)

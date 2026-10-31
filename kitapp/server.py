@@ -71,6 +71,7 @@ def when(iso):
 
 templates.env.filters['when'] = when
 templates.env.filters['ts'] = lambda t: dt.datetime.fromtimestamp(float(t)).strftime('%d %b at %H:%M')
+templates.env.filters['iso'] = lambda t: dt.datetime.fromtimestamp(float(t), dt.timezone.utc).isoformat()
 templates.env.filters['dur'] = lambda s: '' if not s else f'{s // 3600}h {s % 3600 // 60:02d}m' if s >= 3600 else f'{max(1, s // 60)} min'
 STATUS_WORD = {'not_started': 'Not started', 'in_progress': 'In progress', 'finished': 'Finished'}
 STATUS_CLASS = {'not_started': '', 'in_progress': 'in_progress', 'finished': 'submitted'}
