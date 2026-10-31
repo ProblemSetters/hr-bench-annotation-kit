@@ -501,8 +501,8 @@
     box.append(plot);
     const legend = el('div', { class: 'legend' },
       tests.length ? el('span', {}, el('i', { style: { background: 'var(--info)' } }), 'Tests passing, measured') : null,
-      score.length ? el('span', {}, el('i', { style: { background: 'var(--data)' } }), `${lab[0].toUpperCase() + lab.slice(1)}, measured`) : null,
-      claims.length ? el('span', {}, el('i', { style: { border: '2px solid var(--warning)', boxSizing: 'border-box' } }), `${lab[0].toUpperCase() + lab.slice(1)}, agent claimed`) : null);
+      score.length ? el('span', { title: 'The builder\'s script calls this ' + lab.replace(/ /g, '_') }, el('i', { style: { background: 'var(--data)' } }), 'Evaluation score, measured') : null,
+      claims.length ? el('span', {}, el('i', { style: { border: '2px solid var(--warning)', boxSizing: 'border-box' } }), 'Evaluation score, agent claimed') : null);
     return el('div', {}, box, el('div', { class: 'chart-x' }, el('span', {}, 'Step 1'), cur ? el('span', {}, `You are on step ${cur}`) : null, el('span', {}, `Step ${N}`)), legend);
   }
 
@@ -933,21 +933,29 @@
         el('p', { class: 'small muted', style: { marginBottom: '8px' } }, 'Shown to reviewers only. Annotators do not see these.'),
         el('dl', { class: 'kv' }, Object.entries(b.scores).map(([k, v]) => [el('dt', {}, k.replace(/_/g, ' ')), el('dd', { class: 'num' }, v)]))));
     }
-    const lastTests = R.filter((r) => r.kind === 'tests' && r.source === 'measured').pop();
-    const labels = [...new Set(R.filter((r) => r.kind === 'score' && r.source === 'measured').map((r) => r.label))];
-    const finals = labels.map((l) => R.filter((r) => r.kind === 'score' && r.label === l && r.source === 'measured').pop());
-    box.append(el('section', { class: 'card' }, el('h3', { style: { marginBottom: '6px' } }, 'Last measured results'),
-      el('p', { class: 'small muted', style: { marginBottom: '10px' } },
-        'The latest number of each kind printed by a test or evaluation the builder ran, and the step it came from. These are the builder\'s own checks on the task\'s public sample cases, not the official answer key. The names come from the builder\'s script: status accuracy is usually the share of cases with the right deletion status, sequence accuracy the share with exactly the right steps, and field accuracy the share of individual fields that were right.'),
-      !lastTests && !finals.length ? el('p', { class: 'muted' }, 'No tests or scores were measured in this session.') :
-        el('ul', { class: 'cmdlist' },
-          lastTests ? el('li', {}, el('span', { class: 'dot ' + (lastTests.failed ? 'bad' : 'neutral') }), el('span', {}, el('b', {}, 'Tests: '), readingText(lastTests)), stepLink(lastTests)) : null,
-          finals.map((r) => el('li', {}, el('span', { class: 'dot neutral' }), el('span', {}, el('b', {}, r.label[0].toUpperCase() + r.label.slice(1) + ': '), r.text), stepLink(r))))));
+    // Results are shown per run, with the command and the numbers as the builder's script named them:
+    // names differ from build to build, so the app doesn't try to explain them.
+    const M = R.filter((r) => r.source === 'measured');
+    const lastTest = M.filter((r) => r.kind === 'tests').pop();
+    const lastScore = M.filter((r) => r.kind === 'score').pop();
+    const evalRun = lastScore ? M.filter((r) => r.kind === 'score' && r.run === lastScore.run) : [];
+    const runCard = (title, r, body) => el('section', { class: 'card runcard' },
+      el('div', { class: 'card-head' }, el('h3', {}, title), el('span', { class: 'spacer' }), stepLink(r)),
+      r.cmd ? el('pre', { class: 'runcmd' }, r.cmd) : null, body);
+    box.append(el('p', { class: 'muted', style: { margin: '6px 0 14px' } },
+      'From the tests and evaluation scripts the builder ran, on the task\'s public samples, not the official answer key. The names are the builder\'s own; open the step to see exactly what was measured.'));
+    if (!lastTest && !lastScore) box.append(el('div', { class: 'card empty' }, 'The builder did not run any tests or evaluations in this session.'));
+    const scores = () => el('div', { style: { marginTop: '10px' } }, el('div', { class: 'who-label' }, 'Scores, as printed by the builder\'s script'),
+      el('dl', { class: 'kv' }, evalRun.map((r) => [el('dt', { class: 'mono' }, r.label.replace(/ /g, '_')), el('dd', { class: 'num' }, r.text)])));
+    const same = lastTest && lastScore && lastTest.run === lastScore.run;
+    if (lastTest) box.append(runCard(same ? 'Last test run (it also printed scores)' : 'Last test run', lastTest,
+      el('div', {}, el('p', { class: lastTest.failed ? 'bad' : '' }, readingText(lastTest)), same ? scores() : null)));
+    if (lastScore && !same) box.append(runCard('Last run that printed scores', lastScore, scores()));
     if (R.some((r) => r.n)) box.append(el('section', { class: 'card' }, el('h3', { style: { marginBottom: '8px' } }, 'Across the session'), chart(null, L, 180)));
     if (R.length) {
       box.append(el('section', { class: 'section' }, el('h2', {}, `Every reading (${R.length})`), el('p', { class: 'small muted' }, '"Measured" came from the output of a test or evaluation that actually ran. "Agent claimed" came from the agent\'s own message.'),
-        el('div', { class: 'table-wrap' }, el('table', {}, el('thead', {}, el('tr', {}, ['Step', 'What', 'Value', 'Source'].map((h) => el('th', {}, h)))),
-          el('tbody', {}, R.map((r) => el('tr', {}, el('td', {}, stepLink(r)), el('td', {}, r.kind === 'tests' ? 'Tests' : r.label), el('td', { class: 'num' }, r.kind === 'tests' ? `${r.passed} passed, ${r.failed} failed` : r.text), el('td', {}, sourceBadge(r)))))))));
+        el('div', { class: 'table-wrap' }, el('table', {}, el('thead', {}, el('tr', {}, ['Step', 'Name (from the builder\'s script)', 'Value', 'Source'].map((h) => el('th', {}, h)))),
+          el('tbody', {}, R.map((r) => el('tr', {}, el('td', {}, stepLink(r)), el('td', { class: r.kind === 'tests' ? '' : 'mono small' }, r.kind === 'tests' ? 'Tests' : r.label.replace(/ /g, '_')), el('td', { class: 'num' }, r.kind === 'tests' ? `${r.passed} passed, ${r.failed} failed` : r.text), el('td', {}, sourceBadge(r)))))))));
     }
     return box;
   }

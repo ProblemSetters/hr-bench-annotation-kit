@@ -467,6 +467,9 @@ button.linkbtn { background: none; border: 0; padding: 0; min-height: 0; font: i
 button.linkbtn:hover { color: var(--text); }
 .field .help.above { margin: -4px 0 10px; }
 .tabnote { margin: -6px 0 16px; }
+.runcard .card-head { margin-bottom: 8px; }
+.runcard pre.runcmd { margin: 0 0 10px; padding: 8px 10px; background: var(--raised); border-radius: var(--radius-control); font-size: 12.5px; white-space: pre-wrap; word-break: break-all; }
+.runcard .kv { grid-template-columns: minmax(140px, max-content) 1fr; }
 .labels .panel-sec { font-size: 13px; font-weight: 600; color: var(--muted); margin: 0 0 14px; }
 .labels-foot { border-top: 1px solid var(--rule); padding: 12px 22px; display: flex; gap: 10px; align-items: center; }
 .kbd { font-family: var(--mono); font-size: 11.5px; border: 1px solid var(--control); border-radius: 4px; padding: 0 5px; color: var(--muted); }
