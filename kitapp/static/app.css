@@ -268,6 +268,8 @@ body.labeling #app { flex: 1; min-height: 0; display: flex; flex-direction: colu
 .modes a { display: flex; align-items: center; gap: 8px; white-space: nowrap; text-decoration: none; color: var(--muted); padding: 0 12px; font-weight: 500; border-bottom: 2px solid transparent; }
 .modes a:hover { color: var(--text); }
 .modes a[aria-current="page"] { color: var(--text); border-bottom-color: var(--text); }
+.modes .guide-open { margin: 0 40px 0 auto; align-self: center; display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; flex: none; min-height: 30px; padding: 0 10px; font-size: 13px; font-weight: 500; background: transparent; border: 1px solid var(--control); border-radius: var(--radius-control); color: var(--text); }
+.modes .guide-open:hover { background: var(--active); }
 .modes .n { font-size: 12px; color: var(--muted); font-weight: 400; font-variant-numeric: tabular-nums; }
 .taskprog { display: flex; align-items: center; gap: 16px; padding: 0 22px; }
 .taskprog .bar { width: 140px; margin-top: 6px; }

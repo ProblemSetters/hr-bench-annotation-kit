@@ -228,7 +228,9 @@
       el('a', { href: stepHash(s0), 'aria-current': r.mode === 'steps' ? 'page' : null }, 'Steps'),
       el('a', { href: '#/final/summary', 'aria-current': r.mode === 'final' ? 'page' : null }, 'Final build'),
       el('a', { href: '#/wrap', 'aria-current': r.mode === 'wrap' ? 'page' : null }, T.wrap,
-        S.status === 'submitted' ? el('span', { class: 'badge ok' }, T.doneTitle) : S.complete ? el('span', { class: 'badge ok' }, 'Ready') : null));
+        S.status === 'submitted' ? el('span', { class: 'badge ok' }, T.doneTitle) : S.complete ? el('span', { class: 'badge ok' }, 'Ready') : null),
+      S.schema.guide ? el('button', { class: 'guide-open', onclick: () => openGuide(), title: 'Definitions, worked examples and keyboard shortcuts' },
+        'Labelling guide', el('span', { class: 'kbd', 'aria-hidden': 'true' }, '?')) : null);
   }
 
   function render() {
@@ -670,7 +672,7 @@
     const drawer = el('div', { id: 'guide', class: 'drawer-wrap' },
       el('div', { class: 'drawer-backdrop', onclick: closeGuide }),
       el('aside', { class: 'drawer', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'guide-title' },
-        el('div', { class: 'drawer-head' }, el('h2', { id: 'guide-title' }, 'How to label'), el('span', { class: 'spacer' }), close), body));
+        el('div', { class: 'drawer-head' }, el('h2', { id: 'guide-title' }, 'Labelling guide'), el('span', { class: 'spacer' }), close), body));
     document.body.append(drawer);
     document.addEventListener('keydown', guideKeys, true);
     close.focus();
@@ -740,8 +742,7 @@
       return wrap;
     }
     const badge = el('span', { id: 'stepbadge' }); setStateBadge(badge, s);
-    body.append(el('div', { class: 'labels-title' }, el('h2', {}, `Step ${s.n}`), badge, el('span', { class: 'spacer' }),
-      S.schema.guide ? el('button', { class: 'ghost sm', onclick: () => openGuide() }, 'How to label') : null));
+    body.append(el('div', { class: 'labels-title' }, el('h2', {}, `Step ${s.n}`), badge));
     const kind = trivialKind(s);
     if (kind && !READONLY) {
       const msg = el('span', { class: 'grow' }, kind === 'slash' ? 'This prompt is a slash command.' : 'This prompt only tells the agent to carry on.',
@@ -772,7 +773,7 @@
     const foot = el('div', { class: 'labels-foot' },
       el('button', { class: 'ghost', disabled: !prev, onclick: () => go(stepHash(prev)) }, 'Back'),
       el('span', { class: 'spacer' }),
-      el('span', { class: 'tiny muted', title: 'j and k move between steps, n jumps to the next unfinished one. 1 to 4 answer the first question, c and u the two checkboxes, 5 to 8 who wrote the prompt.' }, 'Shortcuts: press ', el('span', { class: 'kbd' }, '?')),
+      S.schema.guide ? el('button', { class: 'ghost sm', onclick: () => openGuide('keys'), title: 'Definitions, worked examples and keyboard shortcuts' }, 'Shortcuts') : null,
       next ? el('button', { class: 'primary', onclick: () => go(stepHash(todo && stepState(s) === 'done' ? todo : next)) }, 'Next step')
         : el('a', { class: 'btn primary', href: '#/wrap' }, 'Go to wrap up'));
     wrap.append(body, foot);
@@ -1089,7 +1090,7 @@
   function renderWrap() {
     const P = S.progress, L = labelable();
     const pane = el('div', { class: 'pane', style: { maxWidth: '820px', margin: '0 auto', width: '100%' } });
-    pane.append(el('div', { class: 'stephead-row' }, el('h1', {}, T.wrap), el('span', { class: 'spacer' }), S.schema.guide ? el('button', { class: 'ghost sm', onclick: () => openGuide('session') }, 'How to label') : null), el('p', { class: 'muted', style: { margin: '4px 0 16px' } }, 'Grade the session as a whole and check the mistakes you marked. ' + T.intro));
+    pane.append(el('div', { class: 'stephead-row' }, el('h1', {}, T.wrap), el('span', { class: 'spacer' }), S.schema.guide ? el('button', { class: 'ghost sm', onclick: () => openGuide('session') }, 'Labelling guide') : null), el('p', { class: 'muted', style: { margin: '4px 0 16px' } }, 'Grade the session as a whole and check the mistakes you marked. ' + T.intro));
     const item = (ok, title, sub, action) => el('li', {}, el('span', { class: 'sticon ' + (ok ? 'done' : 'todo'), 'aria-hidden': 'true' }),
       el('div', { class: 'grow' }, el('b', {}, title), el('div', { class: 'small muted' }, sub)), action || null);
     const todo = nextTodo();
