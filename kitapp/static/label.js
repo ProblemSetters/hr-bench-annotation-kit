@@ -225,7 +225,7 @@
     const m = clear($('modes'));
     const s0 = r.mode === 'steps' ? r.step : (nextTodo() || L[0] || S.steps[0]);
     m.append(
-      el('a', { href: '#/brief', 'aria-current': r.mode === 'brief' ? 'page' : null, title: 'The task the builders were given' }, 'Task brief'),
+      el('a', { href: '#/brief', 'aria-current': r.mode === 'brief' ? 'page' : null, title: 'The task the builder of this build was given' }, "Builder's task"),
       el('a', { href: stepHash(s0), 'aria-current': r.mode === 'steps' ? 'page' : null }, 'Steps'),
       el('a', { href: '#/final/summary', 'aria-current': r.mode === 'final' ? 'page' : null }, 'Final build'),
       el('a', { href: '#/wrap', 'aria-current': r.mode === 'wrap' ? 'page' : null }, T.wrap,
@@ -249,7 +249,7 @@
         if (top < list.scrollTop + 40 || top > list.scrollTop + h - 80) list.scrollTop = Math.max(0, top - h / 3);
       }
     } else if (r.mode === 'final') {
-      // Same three columns as Steps and Task brief: section list left, answers for the step you were on right.
+      // Same three columns as Steps and the builder's task: section list left, answers for the step you were on right.
       box.className = 'workspace final';
       const s = S.lastStep || nextTodo() || labelable()[0] || S.steps[0];
       clear(box).append(renderFinalNav(r.section), el('div', { class: 'pane' }, el('div', { id: 'final' }, el('p', { class: 'muted' }, 'Loading…'))), renderStepLabels(s));
@@ -260,8 +260,8 @@
       const s = S.lastStep || nextTodo() || labelable()[0] || S.steps[0];
       const pane = el('div', { class: 'pane calm' }, el('p', { class: 'muted' }, 'Loading…'));
       clear(box).append(renderRail(null), pane, renderStepLabels(s));
-      data('brief').then((md) => { if (route().mode === 'brief') clear(pane).append(el('h1', {}, 'Task brief'),
-        el('p', { class: 'muted', style: { margin: '4px 0 18px' } }, 'The task every builder was given. Read it once before you label.'),
+      data('brief').then((md) => { if (route().mode === 'brief') clear(pane).append(el('h1', {}, "The builder's task"),
+        el('div', { class: 'note info', style: { margin: '8px 0 20px' } }, el('span', {}, 'This is the brief the builder was given in the hackathon. The session you are labelling is them working with an AI coding agent to build it. You don\'t need to build anything: read it once so you can judge whether each step moved the build toward this goal.')),
         el('div', { class: 'md' }, renderMarkdown(md || 'No task brief was included with these tasks.'))); });
     } else {
       box.className = 'workspace one';
