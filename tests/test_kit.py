@@ -27,7 +27,6 @@ def make_kit(app_id='A100'):
                                     'scores': {'judge_total': 71}},
                           'steps': STEPS, 'code': [], 'output': {'summary': {}, 'rows': []}, 'context': {}}.items():
             json.dump(obj, open(f'{root}/tasks/{bid}/{name}.json', 'w'))
-    json.dump({'application_id': app_id, 'builds': ['b001', 'b002']}, open(f'{root}/tasks/kit.json', 'w'))
     open(f'{root}/tasks/brief.md', 'w').write('# The task\nDelete ghost data.')
     return root
 
@@ -73,9 +72,9 @@ def test_first_run_details_and_checks():
     assert c.get('/tasks').headers['location'] == '/setup'
     t = token(c, '/setup')
     assert c.post('/setup', data={**details(), 'csrf': 'nope'}).status_code == 403
-    r = c.post('/setup', data={**details('B999'), 'csrf': t})
-    assert r.status_code == 200 and 'does not match' in r.text  # id must match the tasks it was sent with
-    assert 'value="Ada"' in r.text and 'value="B999"' in r.text  # what was typed stays in the form
+    r = c.post('/setup', data={**details('bad id!'), 'csrf': t})
+    assert r.status_code == 200 and 'letters, numbers' in r.text
+    assert 'value="Ada"' in r.text and 'value="bad id!"' in r.text  # what was typed stays in the form
     r = c.post('/setup', data={**details(email='not-an-email'), 'csrf': t})
     assert 'valid email' in r.text
     r = c.post('/setup', data={**details(years_coding='2 to 5 years', ai_tools=['Codex', 'Cursor', 'Bogus']), 'csrf': t})
@@ -95,6 +94,18 @@ def test_open_page_still_saves_after_a_restart():
     _, c2 = load_app(root, 'annotate')  # the app restarts; the open page keeps its old token
     assert c2.put('/api/t/b001/labels', json={'part': 'steps', 'target': 'S1.1', 'value': {'effect': 'Helped'}}, headers=h).status_code == 200
     assert 'kit-token' not in ''.join(zipfile.ZipFile(c2.post('/export', data={'csrf': h['X-CSRF-Token']}) and f'{root}/exports/submission_A100.zip').namelist())
+
+
+def test_any_application_id_and_newest_details_win():
+    root = make_kit()
+    _, c = load_app(root, 'annotate')
+    assert c.post('/setup', data={**details('ZZ-77'), 'csrf': token(c, '/setup')}).status_code == 303  # no check against the tasks
+    assert 'Ada Lovelace' in c.get('/tasks').text
+    # someone unzips another person's folder into this kit: the details entered here still win
+    os.makedirs(f'{root}/annotations/OLD1')
+    json.dump({'first_name': 'Old', 'last_name': 'Person', 'email': 'o@example.test', 'updated_at': '2020-01-01T00:00:00+00:00'},
+              open(f'{root}/annotations/OLD1/annotator-metadata.json', 'w'))
+    assert 'Ada Lovelace' in c.get('/tasks').text
 
 
 def test_only_local_hosts():

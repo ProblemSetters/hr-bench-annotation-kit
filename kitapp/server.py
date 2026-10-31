@@ -195,8 +195,7 @@ if not REVIEW:
     def details_form(request, values=None, error='', editing=False):
         u = viewer()
         locked = bool(editing and u and store.has_answers(u.app_id))
-        return page(request, 'setup.html', f=values or {}, error=error, years=YEARS, tools=TOOLS, editing=editing, locked=locked,
-                    expected=bool(store.kit_info().get('application_id')))
+        return page(request, 'setup.html', f=values or {}, error=error, years=YEARS, tools=TOOLS, editing=editing, locked=locked)
 
     def read_details(application_id, first_name, last_name, email, years_coding, ai_tools):
         v = {'application_id': application_id.strip(), 'first_name': first_name.strip()[:100], 'last_name': last_name.strip()[:100],
@@ -204,10 +203,6 @@ if not REVIEW:
              'ai_tools': [t for t in TOOLS if t in ai_tools]}
         if not safe_id(v['application_id']):
             return v, 'Enter your application id. It uses letters, numbers, - and _ only.'
-        want = store.kit_info().get('application_id')
-        if want and v['application_id'] != want:
-            return v, ('That application id does not match the one these tasks were made for. '
-                       'Check the email we sent you, and make sure you unzipped your own tasks file.')
         if not v['first_name'] or not v['last_name']:
             return v, 'Enter your first and last name.'
         if not EMAIL.match(v['email']):
@@ -280,7 +275,7 @@ if not REVIEW:
         last = os.path.getmtime(out) if os.path.exists(out) else None
         notices, store.notices[:] = list(store.notices), []
         return page(request, 'tasks.html', rows=rows, broken=broken, notices=notices, exported=exported, saved=saved,
-                    last_export=last, export_name=os.path.basename(out), kit=store.kit_info())
+                    last_export=last, export_name=os.path.basename(out))
 
     @app.post('/export')
     async def export(request: Request):

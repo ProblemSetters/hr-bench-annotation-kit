@@ -1,7 +1,6 @@
 """Files on disk are the whole state of the kit.
 
 tasks/
-  kit.json                      who the tasks are for (application id) and which builds
   brief.md                      the task the participants were given
   <build_id>/build.json ...     one cleaned build per folder
 annotations/
@@ -105,13 +104,6 @@ class Store:
         self._cache = {}
 
     # ---------- tasks ----------
-    def kit_info(self):
-        p = os.path.join(self.tasks_dir, 'kit.json')
-        try:
-            return read_json(p)
-        except (OSError, ValueError):
-            return {}
-
     def task_ids(self):
         if not os.path.isdir(self.tasks_dir):
             return []
@@ -188,12 +180,12 @@ class Store:
             return None
 
     def current_annotator(self):
-        """In annotate mode the kit belongs to one person: the id in tasks/kit.json, else the only folder there is."""
-        want = self.kit_info().get('application_id')
+        """In annotate mode the kit belongs to one person: the details entered on this computer. If someone has
+        unzipped a second person's folder here, the most recently updated details win."""
         ids = self.annotator_ids()
-        if want:
-            return want if want in ids else None
-        return ids[0] if len(ids) == 1 else None
+        if len(ids) <= 1:
+            return ids[0] if ids else None
+        return max(ids, key=lambda i: (self.meta(i) or {}).get('updated_at') or '')
 
     def has_answers(self, app_id):
         d = os.path.join(self.ann_dir, app_id)

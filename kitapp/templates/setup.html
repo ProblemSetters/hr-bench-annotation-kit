@@ -19,7 +19,7 @@
       <span class="help" id="appid-help">Locked, because you have already started labelling under this id.</span>
       {% else %}
       <input name="application_id" value="{{ f.application_id or '' }}" required autocomplete="off" spellcheck="false" maxlength="64" aria-describedby="appid-help" {% if not editing %}autofocus{% endif %}>
-      <span class="help" id="appid-help">From the email we sent you with your tasks.{% if expected %} It must match the id your tasks were made for.{% endif %}</span>
+      <span class="help" id="appid-help">The id you applied with. Your answers are saved and sent under it.</span>
       {% endif %}
     </label>
     <div class="form-2">

@@ -15,12 +15,12 @@ Unzip this kit anywhere you like, for example in your Documents folder.
 
 ## 2. Add your tasks
 
-We emailed you a file called `tasks_<your application id>.zip`. Unzip it **into this kit folder**. It creates the `tasks` folder for you:
+We sent you a tasks zip file. Unzip it **into this kit folder**. It creates the `tasks` folder for you:
 
 ```
 hr-bench-annotation-kit/
   tasks/
-    kit.json
+    brief.md
     b007/
     b015/
   annotations/     your answers are saved here
@@ -47,7 +47,7 @@ On Windows, type `python start.py` instead.
 
 Then open **http://localhost:8790** in your browser.
 
-The first time, the app asks for your **application id** (from our email), your first and last name and your email. After that it opens straight to your tasks.
+The first time, the app asks for your **application id** (the one you applied with), your first and last name and your email. After that it opens straight to your tasks.
 
 ## 4. Label
 
@@ -74,8 +74,7 @@ You can export as often as you like. Each export replaces the previous file, so 
 |---|---|
 | "Port 8790 is already in use" | Something else is using that port. Close it, or start the kit with `python3 start.py --port 8791` and open http://localhost:8791. With Docker, run `KIT_PORT=8791 docker compose up` instead. |
 | "The kit is already running" | It is open in another terminal window. Use that one, or stop it there first. |
-| "That application id does not match" | Check the id in our email, and make sure you unzipped your own tasks file. |
-| My tasks is empty | The tasks zip was not unzipped into the kit folder. You should see `tasks/kit.json`. |
+| My tasks is empty | The tasks zip was not unzipped into the kit folder. You should see build folders such as `tasks/b007/`. |
 | "Python 3.10 or newer" | Install a newer Python, or use Docker. |
 | Anything else | Run `python3 start.py check` and send us what it prints. With Docker, use `docker compose logs`. |
 
