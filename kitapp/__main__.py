@@ -86,7 +86,7 @@ def main():
 
     if not os.path.isdir(os.path.join(root, 'tasks')) or not any(
             os.path.isdir(os.path.join(root, 'tasks', d)) for d in os.listdir(os.path.join(root, 'tasks'))):
-        print('Note: the tasks folder is empty. Unzip the tasks you were sent into it, then reload the page.')
+        print('Note: there are no tasks yet. Add them with: python3 scripts/add_tasks.py <your tasks zip>, then reload the page.')
     lock = hold_lock(os.path.join(root, 'annotations')) if a.command == 'annotate' else None
     if not port_free(a.host, a.port):
         stop(f'Port {a.port} is already in use. Close whatever is using it, or start the kit with --port {a.port + 1}.')

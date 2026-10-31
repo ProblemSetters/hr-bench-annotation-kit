@@ -198,3 +198,70 @@ def test_review_mode_is_read_only_and_compares():
     # a file made on a different version of the task is flagged
     json.dump({**json.load(open(f'{root}/tasks/b001/context.json')), 'changed': True}, open(f'{root}/tasks/b001/context.json', 'w'))
     assert 'different version of this task' in r.get('/').text
+
+
+# ---------- scripts/add_tasks.py ----------
+import subprocess  # noqa: E402
+
+ADD = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'scripts', 'add_tasks.py')
+
+
+def run_add(kit, *args):
+    os.makedirs(f'{kit}/scripts', exist_ok=True)
+    shutil.copy(ADD, f'{kit}/scripts/add_tasks.py')
+    return subprocess.run([sys.executable, f'{kit}/scripts/add_tasks.py', *args], capture_output=True, text=True)
+
+
+def task_zip(entries):
+    p = tempfile.mktemp(suffix='.zip')
+    with zipfile.ZipFile(p, 'w') as z:
+        for name, data in entries.items():
+            z.writestr(name, data)
+    return p
+
+
+def test_add_tasks_from_zip_and_again():
+    kit = tempfile.mkdtemp()
+    os.makedirs(f'{kit}/annotations/A1')
+    open(f'{kit}/annotations/A1/b001.json', 'w').write('{"mine": true}')
+    z = task_zip({'tasks/brief.md': '# Task', 'tasks/b001/build.json': '{}', 'tasks/b001/steps.json': '[]',
+                  'tasks/b002/build.json': '{}', 'tasks/b002/steps.json': '[]', '__MACOSX/tasks/._b001': 'x'})
+    r = run_add(kit, z)
+    assert r.returncode == 0, r.stderr
+    assert sorted(d for d in os.listdir(f'{kit}/tasks') if not d.startswith('.')) == ['b001', 'b002', 'brief.md']
+    assert 'Added 2' in r.stdout
+    assert open(f'{kit}/annotations/A1/b001.json').read() == '{"mine": true}'  # answers untouched
+    assert 'Already there, unchanged: b001, b002' in run_add(kit, z).stdout
+    assert not [d for d in os.listdir(f'{kit}/tasks') if d.startswith('.incoming')]
+
+
+def test_add_tasks_keeps_changed_builds_unless_replace():
+    kit = tempfile.mkdtemp()
+    run_add(kit, task_zip({'tasks/b001/build.json': '{}', 'tasks/b001/steps.json': '[]'}))
+    newer = task_zip({'tasks/b001/build.json': '{"v": 2}', 'tasks/b001/steps.json': '[]'})
+    r = run_add(kit, newer)
+    assert 'different, left as they were: b001' in r.stdout and open(f'{kit}/tasks/b001/build.json').read() == '{}'
+    r = run_add(kit, newer, '--replace')
+    assert 'Replaced' in r.stdout and open(f'{kit}/tasks/b001/build.json').read() == '{"v": 2}'
+    assert os.listdir(f'{kit}/tasks/.replaced')
+
+
+def test_add_tasks_from_an_unzipped_folder():
+    kit, src = tempfile.mkdtemp(), tempfile.mkdtemp()
+    os.makedirs(f'{src}/tasks_A1/tasks/b003')
+    for f in ('build', 'steps'):
+        open(f'{src}/tasks_A1/tasks/b003/{f}.json', 'w').write('{}')
+    r = run_add(kit, f'{src}/tasks_A1')
+    assert r.returncode == 0 and os.path.isdir(f'{kit}/tasks/b003')
+
+
+def test_add_tasks_refuses_bad_zips():
+    kit = tempfile.mkdtemp()
+    for entries in ({'tasks/../evil.txt': 'x'}, {'notes.txt': 'x'}, {'tasks/b001/notes.txt': 'x'}):
+        r = run_add(kit, task_zip(entries))
+        assert r.returncode != 0 and 'Nothing was changed' in r.stderr
+    bad = tempfile.mktemp(suffix='.zip')
+    open(bad, 'w').write('not a zip')
+    assert 'not a zip file' in run_add(kit, bad).stderr
+    assert not os.path.exists(f'{kit}/evil.txt')
+    assert [d for d in os.listdir(f'{kit}/tasks') if not d.startswith('.')] == []

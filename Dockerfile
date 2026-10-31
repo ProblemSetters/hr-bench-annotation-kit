@@ -5,6 +5,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY label_schema.json .
 COPY kitapp ./kitapp
+COPY scripts ./scripts
 EXPOSE 8790
 HEALTHCHECK --interval=30s --timeout=5s CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8790/healthz')"
 CMD ["python", "-m", "kitapp"]

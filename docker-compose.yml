@@ -4,6 +4,7 @@ services:
   kit:
     build: .
     image: hr-bench-annotation-kit
+    pull_policy: build                       # rebuild (quickly, from cache) on every start, so an updated kit is always used
     command: ["python", "-m", "kitapp", "${KIT_MODE:-annotate}"]
     environment:
       KIT_PUBLIC_PORT: "${KIT_PORT:-8790}"   # only for the "Open http://localhost:..." message
