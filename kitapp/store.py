@@ -147,7 +147,7 @@ class Store:
         return [s['id'] for s in self.bundle(bid, 'steps') if s.get('labelable')]
 
     def step_checks(self, bid):
-        return {s['id']: s.get('checks') or {} for s in self.bundle(bid, 'steps') if s.get('labelable')}
+        return L.step_checks(self.bundle(bid, 'steps'))
 
     def fingerprint(self, bid):
         """Fingerprint of a task's data, so answers can be matched to the exact version they were made on."""

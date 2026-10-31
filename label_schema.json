@@ -1,5 +1,5 @@
 {
-  "version": "oct26-v10",
+  "version": "oct26-v11",
   "intro": "One task is one build. You complete all three parts for that build: the step labels, the prompt labels and the session grade. Several experts may get the same build, so work on your own and do not compare answers.",
   "parts": [
     {
@@ -180,26 +180,42 @@
         },
         {
           "id": "intent",
-          "label": "What is the prompt asking for? Pick all that apply.",
+          "label": "What is the prompt about? Pick all that apply.",
           "type": "multi",
           "required": true,
           "min": 1,
           "options": [
-            "Plan or design",
-            "Build a feature",
-            "Test or verify",
-            "Fix an error",
+            "Planning or design",
+            "Building a feature",
+            "Testing",
+            "Debugging",
             "Docs or packaging",
-            "Ask a question",
-            "Limit scope",
+            "Limiting scope",
             "Cost or model choice",
             "Security or secrets",
-            "About judges or scoring",
-            "Not a real prompt"
+            "Judges or scoring"
           ],
           "optional_if": {
-            "reaction": "Accepting it and moving on (ok, yes, continue)"
-          }
+            "reaction": [
+              "Accepting it and moving on (ok, yes, continue)"
+            ],
+            "source": [
+              "Inserted by the coding tool, not typed by a person"
+            ]
+          },
+          "renamed": {
+            "Plan or design": "Planning or design",
+            "Build a feature": "Building a feature",
+            "Test or verify": "Testing",
+            "Fix an error": "Debugging",
+            "Limit scope": "Limiting scope",
+            "About judges or scoring": "Judges or scoring"
+          },
+          "retired": [
+            "Ask a question",
+            "Not a real prompt"
+          ],
+          "optional_if_check": "slash"
         },
         {
           "id": "source",
@@ -552,35 +568,31 @@
       },
       {
         "id": "intent",
-        "title": "What is the prompt asking for?",
-        "help": "Pick every intent the prompt really contains. Most prompts have one or two. If the user is only accepting the agent's reply (\"continue\", \"yes\", \"do it\"), you can leave this empty.",
+        "title": "What is the prompt about?",
+        "help": "Pick the areas of work the prompt is about. Most prompts have one or two. This is the topic, not how the user replies (that is the question above). You can leave it empty when the user only accepts the reply (\"continue\", \"yes\"), for a slash command, or for text the coding tool inserted.",
         "items": [
           {
-            "term": "Plan or design",
+            "term": "Planning or design",
             "text": "Decide the approach, architecture, data model or order of work before building."
           },
           {
-            "term": "Build a feature",
+            "term": "Building a feature",
             "text": "Write or change code to add something new."
           },
           {
-            "term": "Test or verify",
-            "text": "Run tests or evaluations, check results, or confirm something works."
+            "term": "Testing",
+            "text": "Running or writing tests or evaluations, or confirming something works."
           },
           {
-            "term": "Fix an error",
-            "text": "Repair a specific bug, failure or wrong output."
+            "term": "Debugging",
+            "text": "Finding and fixing a bug, a failure or wrong output."
           },
           {
             "term": "Docs or packaging",
             "text": "README, reports, logs, zips, submission files."
           },
           {
-            "term": "Ask a question",
-            "text": "The user wants an explanation or information, not a change."
-          },
-          {
-            "term": "Limit scope",
+            "term": "Limiting scope",
             "text": "Narrow the work: \"only this file\", \"step 2 only\", \"don't touch tests\"."
           },
           {
@@ -592,12 +604,8 @@
             "text": "Keys, .env files, personal data, prompt injection."
           },
           {
-            "term": "About judges or scoring",
+            "term": "Judges or scoring",
             "text": "The hackathon's grader, rubric, leaderboard or interview."
-          },
-          {
-            "term": "Not a real prompt",
-            "text": "A slash command, an accidental message or pasted noise with no request in it."
           }
         ]
       },
@@ -692,13 +700,13 @@
         "title": "A slash command",
         "prompt": "/model",
         "what": "The tool changed its model setting. The agent did nothing else.",
-        "answer": "Neutral. The user is not replying to the agent. Intent: Not a real prompt. Source: Typed by the user."
+        "answer": "Neutral. The user is not replying to the agent. The prompt question can stay empty. Source: Typed by the user."
       },
       {
         "title": "\"continue\" after real work",
         "prompt": "continue",
         "what": "The agent then wrote the parser and its tests, and the tests passed.",
-        "answer": "Helped: judge the work, not the one-word prompt. The user is accepting the reply and moving on, so intent can stay empty. Source: Typed by the user."
+        "answer": "Helped: judge the work, not the one-word prompt. The user is accepting the reply and moving on, so the prompt question can stay empty. Source: Typed by the user."
       },
       {
         "title": "A claimed result",
@@ -710,7 +718,7 @@
         "title": "A pasted spec",
         "prompt": "A 900-word brief with headings, numbered requirements and an acceptance checklist",
         "what": "The agent built the first module from it.",
-        "answer": "Intent: Plan or design, and Build a feature. Source: Pasted from another AI, if it reads like model output."
+        "answer": "About: Planning or design, and Building a feature. Source: Pasted from another AI, if it reads like model output."
       },
       {
         "title": "Work that was undone",

@@ -3,6 +3,7 @@ import collections
 import itertools
 import json
 import os
+import re
 from functools import lru_cache
 
 SCHEMA_PATH = os.environ.get('LABEL_SCHEMA', os.path.join(os.path.dirname(os.path.dirname(__file__)), 'label_schema.json'))
@@ -70,9 +71,10 @@ def _clean_field(f, v, step_ids=()):
         return v
     if t == 'multi':
         v = [ren.get(x, x) for x in v] if isinstance(v, list) else v
-        if not isinstance(v, list) or any(x not in f['options'] for x in v):
+        old = f.get('retired') or []  # options no longer shown: kept in saved answers, but they no longer count
+        if not isinstance(v, list) or any(x not in f['options'] and x not in old for x in v):
             raise ValueError(f'{f["id"]}: unknown option')
-        return sorted(set(v), key=f['options'].index)
+        return sorted(set(v), key=(f['options'] + old).index)
     if t == 'bool':
         return bool(v)
     if t in ('text', 'step_ref'):
@@ -106,6 +108,15 @@ def normalize(pid, v):
     return out
 
 
+SLASH = re.compile(r'^/[a-z-]+(\s|$)', re.I)
+
+
+def step_checks(steps):
+    """The pipeline's automatic checks per labelable step, plus whether its prompt is a slash command."""
+    return {s['id']: {**(s.get('checks') or {}), 'slash': bool(SLASH.match(((s.get('prompt') or {}).get('text') or '').strip()))}
+            for s in steps if s.get('labelable')}
+
+
 def visible(f, v):
     """show_if: the question only applies when other answers have these values."""
     return all(v.get(k) == want for k, want in (f.get('show_if') or {}).items())
@@ -114,7 +125,9 @@ def visible(f, v):
 def required(f, v, checks=None):
     if not visible(f, v):
         return False
-    if any(v.get(k) == want for k, want in (f.get('optional_if') or {}).items()):
+    if any(v.get(k) in (want if isinstance(want, list) else [want]) for k, want in (f.get('optional_if') or {}).items()):
+        return False
+    if f.get('optional_if_check') and (checks or {}).get(f['optional_if_check']):
         return False
     return bool(f.get('required') or any(v.get(k) == want for k, want in (f.get('required_if') or {}).items())
                 or (f.get('required_if_check') and (checks or {}).get(f['required_if_check'])))
@@ -124,6 +137,8 @@ def _fields_ok(fields, v, checks=None):
     """checks: the step's automatic checks, for questions that only apply to some steps (show_if_check)."""
     for f in fields:
         x = v.get(f['id'])
+        if f['type'] == 'multi' and x:
+            x = [y for y in x if y in f['options']]
         req = required(f, v, checks)
         if req and x in (None, '', []):
             return False

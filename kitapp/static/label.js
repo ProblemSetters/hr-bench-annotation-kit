@@ -127,13 +127,14 @@
   // show_if: a follow-up question that applies only when another answer has this value (the mistake details).
   // optional_if: a question that may stay empty for some answers ("continue" asks for nothing new).
   const visible = (f, v) => Object.entries(f.show_if || {}).every(([k, want]) => (v || {})[k] === want);
-  const isReq = (f, v, ck) => visible(f, v) && !Object.entries(f.optional_if || {}).some(([k, want]) => v[k] === want) &&
+  const isReq = (f, v, ck) => visible(f, v) && !Object.entries(f.optional_if || {}).some(([k, want]) => [].concat(want).includes(v[k])) &&
+    !(f.optional_if_check && (ck || {})[f.optional_if_check]) &&
     (f.required || Object.entries(f.required_if || {}).some(([k, want]) => v[k] === want) || !!(f.required_if_check && (ck || {})[f.required_if_check]));
   const shown = (f, ck, v) => (!f.show_if_check || !!(ck || {})[f.show_if_check]) && visible(f, v);
   function fieldsOk(fields, v, ck) {
     if (!v) return false;
     return fields.every((f) => {
-      const x = v[f.id];
+      const x = f.type === 'multi' && v[f.id] ? v[f.id].filter((y) => f.options.includes(y)) : v[f.id];  // retired options don't count
       if (isReq(f, v, ck) && isEmpty(x)) return false;
       if (x && f.min_chars && String(x).trim().length < f.min_chars) return false;
       if (f.type === 'checklist' && isReq(f, v) && !checklistDone(f, x)) return false;
@@ -147,7 +148,7 @@
   function stepState(s) {
     if (!s.labelable) return 'none';
     const a = fieldsOk(part('steps').fields, S.labels[key('steps', s.id)], s.checks);
-    const b = fieldsOk(part('prompts').fields, S.labels[key('prompts', s.id)]);
+    const b = fieldsOk(part('prompts').fields, S.labels[key('prompts', s.id)], { slash: trivialKind(s) === 'slash' });
     if (a && b) return 'done';
     return (S.labels[key('steps', s.id)] || S.labels[key('prompts', s.id)]) ? 'partial' : 'todo';
   }
@@ -551,7 +552,6 @@
     const kind = trivialKind(s);
     const filled = [];
     const pv = { ...(S.labels[key('prompts', s.id)] || {}) };
-    if (kind === 'slash' && !(pv.intent || []).length) { pv.intent = ['Not a real prompt']; filled.push('what the prompt asks for'); }
     if (!pv.source) { pv.source = 'Typed by the user'; filled.push('who wrote it'); }
     if (!pv.reaction) { pv.reaction = kind === 'slash' ? 'Not replying to the agent (first prompt, or a new topic)' : 'Accepting it and moving on (ok, yes, continue)'; filled.push('what the user is doing'); }
     if (filled.length) save('prompts', s.id, pv);
@@ -643,7 +643,7 @@
       box.replaceWith(fresh);
       if (focusId) { const f = fresh.querySelector(`[data-fid="${focusId}"]`); if (f) f.focus(); }
     };
-    const step = S.steps.find((x) => x.id === target), ck = step && step.checks;
+    const step = S.steps.find((x) => x.id === target), ck = step && { ...step.checks, slash: trivialKind(step) === 'slash' };
     for (const f of p.fields) {
       if (!shown(f, ck, v)) continue;
       const reveals = p.fields.some((x) => x.show_if && f.id in x.show_if);  // ticking it opens follow-up questions
@@ -683,7 +683,7 @@
       const showAll = S.showAll || f.options.slice(FEW).some((o) => cur.has(o));
       const opts = showAll ? f.options : f.options.slice(0, FEW);
       wrap.append(el('div', { class: 'chips', role: 'group', 'aria-labelledby': fid + '-q' }, opts.map((o) => { const i = f.options.indexOf(o); return el('button', { 'aria-pressed': String(cur.has(o)), disabled: dis, 'data-fid': `${fid}-${i}`,
-        onclick: () => { cur.has(o) ? cur.delete(o) : cur.add(o); set(f.options.filter((x) => cur.has(x)), { focus: `${fid}-${i}` }); } }, o); }),
+        onclick: () => { cur.has(o) ? cur.delete(o) : cur.add(o); set([...f.options, ...(f.retired || [])].filter((x) => cur.has(x)), { focus: `${fid}-${i}` }); } }, o); }),
         !showAll && f.options.length > FEW ? el('button', { class: 'ghost more', onclick: () => { S.showAll = true; set(value || [], {}); } }, `+${f.options.length - FEW} more`) : null));
     } else if (f.type === 'bool') {
       wrap.className = 'field tight';
