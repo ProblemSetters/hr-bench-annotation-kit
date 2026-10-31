@@ -1,5 +1,5 @@
 {
-  "version": "oct26-v7",
+  "version": "oct26-v8",
   "intro": "One task is one build. You complete all three parts for that build: the step labels, the prompt labels and the session grade. Several experts may get the same build, so work on your own and do not compare answers.",
   "parts": [
     {
@@ -61,7 +61,19 @@
         {
           "id": "should_have_asked",
           "type": "bool",
-          "label": "The agent should have asked the user before doing this"
+          "label": "The agent should have asked the user before doing something in this step"
+        },
+        {
+          "id": "should_have_asked_note",
+          "type": "text",
+          "label": "What should the agent have asked?",
+          "help": "The question it should have put to the user, and why the answer mattered.",
+          "show_if": {
+            "should_have_asked": true
+          },
+          "required_if": {
+            "should_have_asked": true
+          }
         },
         {
           "id": "failure",
@@ -395,7 +407,7 @@
           },
           {
             "term": "Did the agent ask anything?",
-            "text": "Answer only if the agent stopped to ask the user something in this step; otherwise leave it. Needed: the agent could not have known the answer from the task, the code or earlier prompts, and a wrong guess would have cost real work. Not needed: the answer was already given or obvious, or the question only delayed the work. Tick 'should have asked' on a step where the agent guessed wrong about something only the user knew."
+            "text": "Answer only if the agent stopped to ask the user something in this step; otherwise leave it. Needed: the agent could not have known the answer from the task, the code or earlier prompts, and a wrong guess would have cost real work. Not needed: the answer was already given or obvious, or the question only delayed the work. Tick 'should have asked' on a step where the agent guessed about something only the user knew, then write the question it should have asked."
           },
           {
             "term": "Did the agent check its work?",
