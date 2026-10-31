@@ -379,13 +379,6 @@
         el('button', { class: 'ghost iconbtn', disabled: !prev, onclick: () => go(stepHash(prev, tab)), 'aria-label': 'Previous step', title: 'Previous step (k)' }, '\u2039'),
         el('button', { class: 'ghost iconbtn', disabled: !next, onclick: () => go(stepHash(next, tab)), 'aria-label': 'Next step', title: 'Next step (j)' }, '\u203a')),
       L.length > 1 ? sessionStrip(s) : null));
-    const before = prevReply(s);
-    if (s.prompt && before) {
-      const shortAnswer = s.prompt.text.trim().length < 40;
-      pane.append(el('details', { class: 'context', open: shortAnswer },
-        el('summary', {}, el('span', { class: 'chev', 'aria-hidden': 'true' }, '\u203a'), ' Before this prompt, the agent said', shortAnswer ? el('span', { class: 'muted' }, ', so the short prompt below is an answer to it') : null),
-        el('div', { class: 'context-body md' }, clampable(renderMarkdown(before.text), 500, before.text.length, 'Show all of it'))));
-    }
     if (s.prompt) pane.append(el('div', { class: 'who-label' }, s.prompt.hint === 'agent' ? 'The parent agent asked' : 'The human asked', hint ? el('span', { class: 'badge ' + hint[1] }, hint[0]) : null),
       el('div', { class: 'promptbox' }, clampable(promptBody(s.prompt.text), 600, s.prompt.text.length, 'Show the full prompt')));
     else pane.append(el('p', { class: 'muted' }, 'The agent worked on its own here, before or between prompts.'));
@@ -431,19 +424,6 @@
     // where the build stood: folded away, one line when closed
     if (s.labelable && testReadings().length) pane.append(progressFold(s.n));
     return pane;
-  }
-
-  // The last thing the agent said before this step's prompt (the previous step's reply, in time order).
-  function prevReply(s) {
-    const i = S.steps.indexOf(s);
-    for (let j = i - 1; j >= 0; j--) {
-      const p = S.steps[j];
-      if (p.session !== s.session) continue;
-      const m = [...p.actions].reverse().find((a) => a.k === 'msg' || (a.k === 'tool' && /request_user_input|ask/i.test(a.tool || '')));
-      if (m) return { text: m.k === 'msg' ? m.text : JSON.stringify(m.input || {}, null, 1) };
-      if (p.prompt) return null;
-    }
-    return null;
   }
 
   function sessionStrip(cur) {

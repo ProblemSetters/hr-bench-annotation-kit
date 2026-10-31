@@ -410,7 +410,7 @@
       {
         "id": "reaction",
         "title": "What is the human doing with the agent's last reply?",
-        "help": "Read the agent's last reply before this prompt (shown above the prompt), then pick the closest one.",
+        "help": "Look at the agent's final response in the step before (press k to go back), then pick the closest one.",
         "items": [
           {
             "term": "Accepting it and moving on",
