@@ -113,13 +113,13 @@
   // ---------- label state ----------
   const part = (id) => S.schema.parts.find((p) => p.id === id);
   const labelable = () => S.steps.filter((s) => s.labelable);
-  // Codex records a human's answer to the agent's multiple-choice question as tagged JSON. Show it as words.
+  // Codex records a user's answer to the agent's multiple-choice question as tagged JSON. Show it as words.
   function readableReply(text) {
     const m = /<send_user_message_question_reply>\s*([\s\S]*?)\s*<\/send_user_message_question_reply>/.exec(text || '');
     if (!m) return null;
     try {
       const items = JSON.parse(m[1]);
-      return items.map((it) => `The agent asked: ${it.question}\nThe human chose: ${it.answer}`).join('\n\n');
+      return items.map((it) => `The agent asked: ${it.question}\nThe user chose: ${it.answer}`).join('\n\n');
     } catch (e) { return null; }
   }
   const isEmpty = (x) => x === null || x === undefined || x === '' || (Array.isArray(x) && !x.length);
@@ -365,7 +365,7 @@
         el('button', { class: 'ghost iconbtn', disabled: !prev, onclick: () => go(stepHash(prev, tab)), 'aria-label': 'Previous step', title: 'Previous step (k)' }, '\u2039'),
         el('button', { class: 'ghost iconbtn', disabled: !next, onclick: () => go(stepHash(next, tab)), 'aria-label': 'Next step', title: 'Next step (j)' }, '\u203a')),
       L.length > 1 ? sessionStrip(s) : null));
-    if (s.prompt) pane.append(el('div', { class: 'who-label' }, s.prompt.hint === 'agent' ? 'The parent agent asked' : 'The human asked', hint ? el('span', { class: 'badge ' + hint[1] }, hint[0]) : null),
+    if (s.prompt) pane.append(el('div', { class: 'who-label' }, s.prompt.hint === 'agent' ? 'The parent agent asked' : 'The user asked', hint ? el('span', { class: 'badge ' + hint[1] }, hint[0]) : null),
       el('div', { class: 'promptbox' }, clampable(promptBody(s.prompt.text), 600, s.prompt.text.length, 'Show the full prompt')));
     else pane.append(el('p', { class: 'muted' }, 'The agent worked on its own here, before or between prompts.'));
 
@@ -377,7 +377,7 @@
       el('span', {}, sess.tool),
       st.tools ? el('a', { href: stepHash(s, 'timeline') }, plural(st.tools, 'tool call')) : el('span', { class: 'muted' }, 'No tool calls'),
       (sm.changed || []).length ? el('a', { href: stepHash(s, 'changes') }, plural(sm.changed.length, 'file') + ' changed ', el('span', { class: 'plus' }, `+${add}`), ' ', el('span', { class: 'minus' }, `−${rem}`)) : null,
-      st.declined ? el('a', { href: stepHash(s, 'timeline') }, st.declined > 1 ? `Human declined ${st.declined} actions` : 'Human declined an action') : null,
+      st.declined ? el('a', { href: stepHash(s, 'timeline') }, st.declined > 1 ? `User declined ${st.declined} actions` : 'User declined an action') : null,
       st.blocked ? el('a', { href: stepHash(s, 'timeline'), title: 'The coding tool\'s own permission check stopped the action' }, st.blocked > 1 ? `Coding tool blocked ${st.blocked} actions` : 'Coding tool blocked an action') : null,
       st.interrupts ? el('span', { class: 'bad' }, 'Interrupted') : null,
       ...checkFacts(s),
@@ -389,7 +389,7 @@
     const diffs = toolActs.flatMap((a) => a.diffs || []);
 
     const tabs = [
-      ['overview', "Agent's final response", null, 'What the agent told the human at the end of the step, the files it changed and the commands it ran'],
+      ['overview', "Agent's final response", null, 'What the agent told the user at the end of the step, the files it changed and the commands it ran'],
       ['changes', 'Code changes', diffs.length, 'The code the agent changed in this step, file by file'],
       ['timeline', "Agent's raw actions", s.actions.length, 'Everything the agent did, in order: messages, tool calls with their output, and reasoning']];
     pane.append(el('nav', { class: 'subtabs', 'aria-label': 'Step detail' }, tabs.map(([id, label, n, tip]) =>
@@ -451,10 +451,10 @@
     const L = labelable(), nx = L[L.indexOf(s) + 1];
     if (s.labelable && nx) {
       const t = nx.prompt.text.replace(/-{5} (end of )?pasted text -{5}/g, ' ').replace(/\s+/g, ' ').trim();
-      box.append(el('div', { class: 'nextup' }, el('div', { class: 'who-label' }, 'What the human said next', timeEl(nx.ts)),
+      box.append(el('div', { class: 'nextup' }, el('div', { class: 'who-label' }, 'What the user said next', timeEl(nx.ts)),
         el('p', {}, t.slice(0, 280) + (t.length > 280 ? '\u2026' : '')),
         el('a', { href: stepHash(nx), class: 'small' }, `Open step ${nx.n}`)));
-    } else if (s.labelable) box.append(el('div', { class: 'nextup' }, el('div', { class: 'who-label' }, 'What the human said next'), el('p', { class: 'muted' }, 'Nothing. This is the last step of the session.')));
+    } else if (s.labelable) box.append(el('div', { class: 'nextup' }, el('div', { class: 'who-label' }, 'What the user said next'), el('p', { class: 'muted' }, 'Nothing. This is the last step of the session.')));
     return box;
   }
 
@@ -510,12 +510,12 @@
         const preview = cmd ? cmd.split('\n').find((l) => l.trim()) : (a.diffs || []).length ? a.diffs.map((d) => relPath(d.file)).join(', ') : (a.input && (a.input.file_path || a.input.pattern || a.input.query)) || '';
         li = el('li', {}, el('span', { class: 'ic tool', 'aria-hidden': 'true' }, 'T'),
           el('details', {}, el('summary', {}, el('div', { class: 'head' }, el('span', { class: 'chev', 'aria-hidden': 'true' }, '›'), el('span', { class: 'kind' }, shortTool(a.tool)), timeEl(a.ts),
-            a.declined ? el('span', { class: 'badge warn' }, 'declined by the human') : null, a.blocked ? el('span', { class: 'badge' }, 'blocked by the coding tool') : null, (a.diffs || []).length ? el('span', { class: 'badge' }, plural(a.diffs.length, 'file') + ' changed') : null),
+            a.declined ? el('span', { class: 'badge warn' }, 'declined by the user') : null, a.blocked ? el('span', { class: 'badge' }, 'blocked by the coding tool') : null, (a.diffs || []).length ? el('span', { class: 'badge' }, plural(a.diffs.length, 'file') + ' changed') : null),
             el('span', { class: 'preview' }, preview || '')),
           el('div', { class: 'body' }, (a.diffs || []).length ? a.diffs.map((d, i) => diffCard(d, i, a.diffs.length)) : cmd !== null ? el('pre', {}, (a.input.description ? '# ' + a.input.description + '\n' : '') + cmd) : el('pre', {}, JSON.stringify(a.input || {}, null, 2)),
             a.output ? el('div', {}, el('div', { class: 'sublabel', style: { margin: '4px 0' } }, 'Output'), el('pre', {}, a.output)) : null)));
       } else if (a.k === 'think') li = el('li', {}, el('span', { class: 'ic', 'aria-hidden': 'true' }, 'R'), el('details', {}, el('summary', {}, el('div', { class: 'head' }, el('span', { class: 'chev' }, '›'), el('span', { class: 'kind muted' }, 'Agent reasoning summary'), timeEl(a.ts))), el('div', { class: 'body' }, el('div', { class: 'prose small' }, a.text))));
-      else if (a.k === 'interrupt') li = el('li', {}, el('span', { class: 'ic bad', 'aria-hidden': 'true' }, '!'), el('div', { class: 'head' }, el('span', { class: 'kind', style: { color: 'var(--negative)' } }, 'The human interrupted the agent'), timeEl(a.ts)));
+      else if (a.k === 'interrupt') li = el('li', {}, el('span', { class: 'ic bad', 'aria-hidden': 'true' }, '!'), el('div', { class: 'head' }, el('span', { class: 'kind', style: { color: 'var(--negative)' } }, 'The user interrupted the agent'), timeEl(a.ts)));
       else li = el('li', {}, el('span', { class: 'ic sys', 'aria-hidden': 'true' }, 'S'), el('details', {}, el('summary', {}, el('div', { class: 'head' }, el('span', { class: 'chev' }, '›'), el('span', { class: 'kind muted' }, a.text.split('\n')[0].slice(0, 120)), timeEl(a.ts))), el('div', { class: 'body' }, el('pre', {}, a.text))));
       ol.append(li);
     }
@@ -549,8 +549,8 @@
         el('dl', {}, sec.items.map((it) => [el('dt', {}, it.term), el('dd', {}, it.text)])))),
       el('section', { id: 'guide-keys', class: 'guide-sec' }, el('h3', {}, 'Keyboard shortcuts'),
         el('dl', { class: 'keys' }, [['j and k', 'Next and previous step'], ['n', 'Next step you have not finished'], ['1 to 4', 'Helped, Neutral, Hurt, Can\'t tell'],
-          ['c', 'The human had to correct this step (on or off)'], ['u', 'This step\'s work was undone later (on or off)'],
-          ['5 to 8', 'Who wrote the prompt: typed by the human, pasted from another AI, inserted by the coding tool, can\'t tell'], ['?', 'Open this guide'], ['Esc', 'Close it']]
+          ['c', 'The user had to correct this step (on or off)'], ['u', 'This step\'s work was undone later (on or off)'],
+          ['5 to 8', 'Who wrote the prompt: typed by the user, pasted from another AI, inserted by the coding tool, can\'t tell'], ['?', 'Open this guide'], ['Esc', 'Close it']]
           .map(([k, d]) => [el('dt', {}, el('span', { class: 'kbd' }, k)), el('dd', {}, d)]))),
       (G.examples || []).length ? el('section', { id: 'guide-examples', class: 'guide-sec' }, el('h3', {}, 'Worked examples'),
         G.examples.map((x) => el('div', { class: 'example' }, el('b', {}, x.title),
@@ -587,8 +587,8 @@
     const filled = [];
     const pv = { ...(S.labels[key('prompts', s.id)] || {}) };
     if (kind === 'slash' && !(pv.intent || []).length) { pv.intent = ['Not a real prompt']; filled.push('what the prompt asks for'); }
-    if (!pv.source) { pv.source = 'Typed by the human'; filled.push('who wrote it'); }
-    if (!pv.reaction) { pv.reaction = kind === 'slash' ? 'Not replying to the agent (first prompt, or a new topic)' : 'Accepting it and moving on'; filled.push('what the human is doing'); }
+    if (!pv.source) { pv.source = 'Typed by the user'; filled.push('who wrote it'); }
+    if (!pv.reaction) { pv.reaction = kind === 'slash' ? 'Not replying to the agent (first prompt, or a new topic)' : 'Accepting it and moving on'; filled.push('what the user is doing'); }
     if (filled.length) save('prompts', s.id, pv);
     const sv = { ...(S.labels[key('steps', s.id)] || {}) };
     if (!sv.effect && quietStep(s)) { sv.effect = 'Neutral'; save('steps', s.id, sv); filled.push('Neutral, because the agent did almost nothing'); }
@@ -643,9 +643,9 @@
           if (q) q.replaceChildren(el('span', { class: 'grow' }, filled.length ? 'Filled in: ' + filled.join('; ') + '. Check them before you move on.' : 'Nothing to fill: you have already answered these.'));
         } }, 'Fill in the obvious answers')));
     }
-    const SOURCE_HINT = { choice: 'The human picked one of the options the coding tool offered, so it was typed or clicked by the human.', paste: 'The trace shows pasted text inside this prompt.', slash: 'This is a slash command typed into the coding tool.' };
+    const SOURCE_HINT = { choice: 'The user picked one of the options the coding tool offered, so it was typed or clicked by the user.', paste: 'The trace shows pasted text inside this prompt.', slash: 'This is a slash command typed into the coding tool.' };
     body.append(el('h3', { class: 'panel-sec' }, "The agent's work in this step"), partFields('steps', s.id), el('div', { class: 'divider' }),
-      el('h3', { class: 'panel-sec' }, "The human's prompt"), partFields('prompts', s.id));
+      el('h3', { class: 'panel-sec' }, "The user's prompt"), partFields('prompts', s.id));
     if (SOURCE_HINT[s.prompt.hint]) body.append(el('p', { class: 'help evidence' }, 'Evidence: ' + SOURCE_HINT[s.prompt.hint]));
     // Personal info should already be scrubbed; this is only a way to report anything that slipped through.
     const fv = { ...(S.labels[key('flags', s.id)] || {}) };
@@ -802,7 +802,7 @@
       tile('Repo files', st.code_files, `${st.files_touched} changed during the session`),
       sm && outcomeOpen() ? tile('Answers', sm.rows, `${sm.status_matches_majority} match the batch majority on status`) : null,
       (b.checks || {}).agent_lines_added ? tile('Agent code kept', `${Math.round(100 * b.checks.agent_lines_kept / b.checks.agent_lines_added)}%`, `of ${b.checks.agent_lines_added.toLocaleString()} lines it added are in the final repo`) : null,
-      (b.checks || {}).final_code_lines ? tile('Code not from agent edits', `${Math.round(100 * b.checks.final_code_lines_untraced / b.checks.final_code_lines)}%`, 'written by the human, by shell commands, or before the session') : null));
+      (b.checks || {}).final_code_lines ? tile('Code not from agent edits', `${Math.round(100 * b.checks.final_code_lines_untraced / b.checks.final_code_lines)}%`, 'written by the user, by shell commands, or before the session') : null));
     const models = Object.entries(b.models || {});
     box.append(el('section', { class: 'card', style: { marginTop: '14px' } }, el('h3', { style: { marginBottom: '8px' } }, 'Tools and models'),
       el('dl', { class: 'kv' }, el('dt', {}, 'Coding tools in the trace'), el('dd', {}, (b.trace_tools || []).join(', ') || 'Not available'),
@@ -1084,6 +1084,19 @@
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush(true); });
   }
 
+  // An answer saved under an option's old wording is shown (and saved again) as the new wording.
+  function renamedToNew(pid, v) {
+    const p = S.schema.parts.find((x) => x.id === pid);
+    if (!p || !v || typeof v !== 'object') return v;
+    const out = { ...v };
+    for (const f of p.fields) {
+      const ren = f.renamed || {};
+      if (!Object.keys(ren).length || out[f.id] == null) continue;
+      out[f.id] = Array.isArray(out[f.id]) ? out[f.id].map((x) => ren[x] || x) : (ren[out[f.id]] || out[f.id]);
+    }
+    return out;
+  }
+
   // ---------- start ----------
   (async function init() {
     try {
@@ -1098,7 +1111,7 @@
       for (const st of steps) if (st.summary) st.summary.metrics = (st.summary.metrics || []).filter(real);
       for (const st of steps) for (const a of st.actions) if (a.metrics) a.metrics = a.metrics.filter(real);
       Object.assign(S, { schema, build, steps, progress: lab.progress, complete: lab.complete, status: lab.status });
-      for (const l of lab.labels) S.labels[key(l.part, l.target)] = l.value;
+      for (const l of lab.labels) S.labels[key(l.part, l.target)] = renamedToNew(l.part, l.value);
       $('t-meta').replaceChildren(el('span', { class: 'badge' }, (build.trace_tools || []).join(' and ')));
       render();
       trackTime();

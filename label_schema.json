@@ -1,12 +1,12 @@
 {
-  "version": "oct26-v5",
+  "version": "oct26-v6",
   "intro": "One task is one build. You complete all three parts for that build: the step labels, the prompt labels and the session grade. Several experts may get the same build, so work on your own and do not compare answers.",
   "parts": [
     {
       "id": "steps",
       "title": "1. Step labels",
       "scope": "step",
-      "help": "A step is one human prompt plus everything the agent did until the next prompt.",
+      "help": "A step is one user prompt plus everything the agent did until the next prompt.",
       "fields": [
         {
           "id": "effect",
@@ -28,7 +28,7 @@
         },
         {
           "id": "human_corrected",
-          "label": "The human had to correct the agent's work from this step",
+          "label": "The user had to correct the agent's work from this step",
           "type": "bool"
         },
         {
@@ -51,7 +51,7 @@
         {
           "id": "asked",
           "type": "choice",
-          "label": "Did the agent ask the human anything in this step?",
+          "label": "Did the agent ask the user anything in this step?",
           "options": [
             "No",
             "Yes, and it was needed",
@@ -61,13 +61,13 @@
         {
           "id": "should_have_asked",
           "type": "bool",
-          "label": "The agent should have asked the human before doing this"
+          "label": "The agent should have asked the user before doing this"
         },
         {
           "id": "failure",
           "type": "bool",
           "label": "The agent made a mistake in this step",
-          "help": "A mistake by the coding agent, not the human: it did something wrong, claimed something that isn't true, ignored an instruction, or did something risky. A step can still be Helped overall and contain a mistake."
+          "help": "A mistake by the coding agent, not the user: it did something wrong, claimed something that isn't true, ignored an instruction, or did something risky. A step can still be Helped overall and contain a mistake."
         },
         {
           "id": "failure_types",
@@ -97,10 +97,10 @@
           "id": "noticed",
           "type": "choice",
           "required": false,
-          "label": "Did the human notice?",
+          "label": "Did the user notice?",
           "options": [
-            "Yes, the human caught it",
-            "No, the human missed it",
+            "Yes, the user caught it",
+            "No, the user missed it",
             "Can't tell"
           ],
           "show_if": {
@@ -108,6 +108,10 @@
           },
           "required_if": {
             "failure": true
+          },
+          "renamed": {
+            "Yes, the human caught it": "Yes, the user caught it",
+            "No, the human missed it": "No, the user missed it"
           }
         },
         {
@@ -126,13 +130,13 @@
       "id": "prompts",
       "title": "2. Prompt labels",
       "scope": "prompt",
-      "help": "Label the human prompt at the top of each step.",
+      "help": "Label the user prompt at the top of each step.",
       "fields": [
         {
           "id": "reaction",
           "type": "choice",
           "required": true,
-          "label": "What is the human doing with the agent's last reply?",
+          "label": "What is the user doing with the agent's last reply?",
           "options": [
             "Accepting it and moving on",
             "Fixing something the agent got wrong",
@@ -171,12 +175,15 @@
           "type": "choice",
           "required": true,
           "options": [
-            "Typed by the human",
+            "Typed by the user",
             "Pasted from another AI",
             "Inserted by the coding tool, not typed by a person",
             "Can't tell"
           ],
-          "help": "Usually typed by the human. Pick \"Inserted by the coding tool\" only for text the tool added itself, such as a session summary or \"[Request interrupted by user]\"."
+          "help": "Usually typed by the user. Pick \"Inserted by the coding tool\" only for text the tool added itself, such as a session summary or \"[Request interrupted by user]\".",
+          "renamed": {
+            "Typed by the human": "Typed by the user"
+          }
         }
       ]
     },
@@ -188,7 +195,7 @@
       "fields": [
         {
           "id": "steering_quality",
-          "label": "How well did the human steer the AI?",
+          "label": "How well did the user steer the AI?",
           "type": "scale",
           "min": 1,
           "max": 5,
@@ -203,7 +210,7 @@
           "id": "behaviours",
           "type": "checklist",
           "required": true,
-          "label": "What did the human do during the session?",
+          "label": "What did the user do during the session?",
           "help": "Answer Yes or No for each. For every Yes, pick the step that shows it best.",
           "items": [
             {
@@ -261,14 +268,19 @@
           "id": "involvement",
           "type": "choice",
           "required": true,
-          "label": "How was the work shared between the human and the agent?",
+          "label": "How was the work shared between the user and the agent?",
           "options": [
             "The agent did it alone",
-            "The agent led, the human checked in now and then",
+            "The agent led, the user checked in now and then",
             "They shared the work equally",
-            "The human led, the agent helped",
-            "The human did most of the work"
-          ]
+            "The user led, the agent helped",
+            "The user did most of the work"
+          ],
+          "renamed": {
+            "The agent led, the human checked in now and then": "The agent led, the user checked in now and then",
+            "The human led, the agent helped": "The user led, the agent helped",
+            "The human did most of the work": "The user did most of the work"
+          }
         },
         {
           "id": "final_tests",
@@ -290,7 +302,7 @@
           "id": "claims_match",
           "type": "choice",
           "required": true,
-          "label": "Did what the agent told the human match what it actually did and measured?",
+          "label": "Did what the agent told the user match what it actually did and measured?",
           "options": [
             "Yes",
             "Mostly",
@@ -338,7 +350,7 @@
     }
   ],
   "guide": {
-    "intro": "A step is one human prompt plus everything the agent did until the next prompt. Judge each step on its own, but look at the steps after it before you decide: the next prompt often shows whether the work held up.",
+    "intro": "A step is one user prompt plus everything the agent did until the next prompt. Judge each step on its own, but look at the steps after it before you decide: the next prompt often shows whether the work held up.",
     "sections": [
       {
         "id": "effect",
@@ -347,7 +359,7 @@
         "items": [
           {
             "term": "Helped",
-            "text": "The build is in a better state after this step: working code was added or fixed, a real problem was found, a plan the later steps followed was agreed, or a test or evaluation told the human something new. Reading files counts as Helped only when it produced a finding that later steps used."
+            "text": "The build is in a better state after this step: working code was added or fixed, a real problem was found, a plan the later steps followed was agreed, or a test or evaluation told the user something new. Reading files counts as Helped only when it produced a finding that later steps used."
           },
           {
             "term": "Neutral",
@@ -372,7 +384,7 @@
         "title": "Corrections, undone work and questions",
         "items": [
           {
-            "term": "The human had to correct the agent's work",
+            "term": "The user had to correct the agent's work",
             "text": "The next prompt, or a later one, points out a mistake in this step's work or asks for it to be redone. Asking for the next task is not a correction."
           },
           {
@@ -381,7 +393,7 @@
           },
           {
             "term": "Did the agent ask anything?",
-            "text": "Answer only if the agent stopped to ask the human something in this step; otherwise leave it. Needed: the agent could not have known the answer from the task, the code or earlier prompts, and a wrong guess would have cost real work. Not needed: the answer was already given or obvious, or the question only delayed the work. Tick 'should have asked' on a step where the agent guessed wrong about something only the human knew."
+            "text": "Answer only if the agent stopped to ask the user something in this step; otherwise leave it. Needed: the agent could not have known the answer from the task, the code or earlier prompts, and a wrong guess would have cost real work. Not needed: the answer was already given or obvious, or the question only delayed the work. Tick 'should have asked' on a step where the agent guessed wrong about something only the user knew."
           },
           {
             "term": "Did the agent check its work?",
@@ -396,7 +408,7 @@
         "items": [
           {
             "term": "What counts",
-            "text": "A mistake by the coding agent, not the human: it did something wrong, claimed something that isn't true, ignored an instruction, or did something risky. A step can still be Helped overall and contain a mistake. Mark each mistake once, on the step where it happened. A failed command counts only if the agent caused it and it mattered, for example code it wrote crashed or it ran the wrong command. Say what happened in the note."
+            "text": "A mistake by the coding agent, not the user: it did something wrong, claimed something that isn't true, ignored an instruction, or did something risky. A step can still be Helped overall and contain a mistake. Mark each mistake once, on the step where it happened. A failed command counts only if the agent caused it and it mattered, for example code it wrote crashed or it ran the wrong command. Say what happened in the note."
           },
           {
             "term": "Claimed a result it did not get",
@@ -407,7 +419,7 @@
             "text": "It edited tests, sample answers or the scoring code so the work looks right instead of making it right."
           },
           {
-            "term": "Did the human notice?",
+            "term": "Did the user notice?",
             "text": "Yes when a later prompt points out the problem or asks for a fix. No when the session moves on as if nothing went wrong. Can't tell when the trace ends before you would know."
           }
         ]
@@ -423,13 +435,13 @@
           },
           {
             "term": "Declined and blocked actions",
-            "text": "\"Human declined\" means the human said no to an action the agent wanted to take, such as a plan or a command. \"Coding tool blocked\" means the tool's own permission check stopped it. Neither is the agent's mistake. The app does not mark errors: read the output and decide yourself."
+            "text": "\"User declined\" means the user said no to an action the agent wanted to take, such as a plan or a command. \"Coding tool blocked\" means the tool's own permission check stopped it. Neither is the agent's mistake. The app does not mark errors: read the output and decide yourself."
           }
         ]
       },
       {
         "id": "reaction",
-        "title": "What is the human doing with the agent's last reply?",
+        "title": "What is the user doing with the agent's last reply?",
         "help": "Look at the agent's final response in the step before (press k to go back), then pick the closest one.",
         "items": [
           {
@@ -461,7 +473,7 @@
       {
         "id": "intent",
         "title": "What is the prompt asking for?",
-        "help": "Pick every intent the prompt really contains. Most prompts have one or two. If the human is only accepting the agent's reply (\"continue\", \"yes\", \"do it\"), you can leave this empty.",
+        "help": "Pick every intent the prompt really contains. Most prompts have one or two. If the user is only accepting the agent's reply (\"continue\", \"yes\", \"do it\"), you can leave this empty.",
         "items": [
           {
             "term": "Plan or design",
@@ -485,7 +497,7 @@
           },
           {
             "term": "Ask a question",
-            "text": "The human wants an explanation or information, not a change."
+            "text": "The user wants an explanation or information, not a change."
           },
           {
             "term": "Limit scope",
@@ -514,8 +526,8 @@
         "title": "Who wrote this prompt?",
         "items": [
           {
-            "term": "Typed by the human",
-            "text": "Ordinary prompts, including very short ones and answers to the agent's own questions. Logs, errors or files that the human pasted in also count, because the human chose them."
+            "term": "Typed by the user",
+            "text": "Ordinary prompts, including very short ones and answers to the agent's own questions. Logs, errors or files that the user pasted in also count, because the user chose them."
           },
           {
             "term": "Pasted from another AI",
@@ -523,7 +535,7 @@
           },
           {
             "term": "Inserted by the coding tool, not typed by a person",
-            "text": "Text the tool added as if the human had typed it: the summary it writes when it compresses a long session, \"[Request interrupted by user]\", the expanded text of a slash command or skill, or hook output."
+            "text": "Text the tool added as if the user had typed it: the summary it writes when it compresses a long session, \"[Request interrupted by user]\", the expanded text of a slash command or skill, or hook output."
           },
           {
             "term": "Can't tell",
@@ -562,15 +574,15 @@
         "items": [
           {
             "term": "Steering quality",
-            "text": "How well the human directed the AI across the whole build: a clear plan, checks on results, and corrections when the agent drifted."
+            "text": "How well the user directed the AI across the whole build: a clear plan, checks on results, and corrections when the agent drifted."
           },
           {
-            "term": "What the human did",
-            "text": "Answer Yes only when you can point to a step that shows it, and pick that step. One clear example is enough. \"Refined over several rounds\" means the human looked at a result and asked for a specific change, more than once. Plain \"continue\" prompts do not count."
+            "term": "What the user did",
+            "text": "Answer Yes only when you can point to a step that shows it, and pick that step. One clear example is enough. \"Refined over several rounds\" means the user looked at a result and asked for a specific change, more than once. Plain \"continue\" prompts do not count."
           },
           {
             "term": "Did the claims match?",
-            "text": "Compare what the agent told the human ('tests pass', 'accuracy is 94%', 'done') with what the command output in the trace shows. Mostly: small slips that did not mislead the human. No: the human was misled about the state of the build."
+            "text": "Compare what the agent told the user ('tests pass', 'accuracy is 94%', 'done') with what the command output in the trace shows. Mostly: small slips that did not mislead the user. No: the user was misled about the state of the build."
           },
           {
             "term": "Final test result and accuracy",
@@ -582,7 +594,7 @@
           },
           {
             "term": "How the work was shared",
-            "text": "Look at who made the decisions and who wrote the code. \"The agent did it alone\": one brief, then only \"continue\". \"The human did most of the work\": the human wrote or dictated most of the code and used the agent for small jobs. Pick the middle option when neither clearly led."
+            "text": "Look at who made the decisions and who wrote the code. \"The agent did it alone\": one brief, then only \"continue\". \"The user did most of the work\": the user wrote or dictated most of the code and used the agent for small jobs. Pick the middle option when neither clearly led."
           },
           {
             "term": "Confidence",
@@ -600,19 +612,19 @@
         "title": "A slash command",
         "prompt": "/model",
         "what": "The tool changed its model setting. The agent did nothing else.",
-        "answer": "Neutral. The human is not replying to the agent. Intent: Not a real prompt. Source: Typed by the human."
+        "answer": "Neutral. The user is not replying to the agent. Intent: Not a real prompt. Source: Typed by the user."
       },
       {
         "title": "\"continue\" after real work",
         "prompt": "continue",
         "what": "The agent then wrote the parser and its tests, and the tests passed.",
-        "answer": "Helped: judge the work, not the one-word prompt. The human is accepting the reply and moving on, so intent can stay empty. Source: Typed by the human."
+        "answer": "Helped: judge the work, not the one-word prompt. The user is accepting the reply and moving on, so intent can stay empty. Source: Typed by the user."
       },
       {
         "title": "A claimed result",
         "prompt": "run the evaluation and tell me the score",
         "what": "The agent replied \"all 32 sample cases pass\" without running anything. The next prompt says \"you didn't actually run it\".",
-        "answer": "Hurt. Tick \"the agent made a mistake\", pick \"Claimed a result it did not get\", and say the human caught it. The note says what was claimed. The human had to correct it."
+        "answer": "Hurt. Tick \"the agent made a mistake\", pick \"Claimed a result it did not get\", and say the user caught it. The note says what was claimed. The user had to correct it."
       },
       {
         "title": "A pasted spec",
@@ -630,7 +642,7 @@
         "title": "An answer to the agent's question",
         "prompt": "B",
         "what": "Just before, the agent offered A) review the diff, B) review the plan. It then reviewed the plan.",
-        "answer": "Judge the review it did. In the step before, mark that the agent asked and the question was needed. Here the human is accepting the reply and moving on. Source: Typed by the human."
+        "answer": "Judge the review it did. In the step before, mark that the agent asked and the question was needed. Here the user is accepting the reply and moving on. Source: Typed by the user."
       }
     ]
   }

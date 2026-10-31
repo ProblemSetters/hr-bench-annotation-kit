@@ -82,10 +82,10 @@ def to_map(answers):
     m = {}
     for p in ('session', 'failures'):
         if answers.get(p) is not None:
-            m[(p, '')] = answers[p]
+            m[(p, '')] = L.normalize(p, answers[p])
     for p in KEYED:
         for t, v in (answers.get(p) or {}).items():
-            m[(p, t)] = v
+            m[(p, t)] = L.normalize(p, v)
     return m
 
 

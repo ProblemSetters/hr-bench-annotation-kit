@@ -62,11 +62,14 @@ def _clean_field(f, v, step_ids=()):
         if not f['min'] <= v <= f['max']:
             raise ValueError(f'{f["id"]} out of range')
         return v
+    ren = f.get('renamed') or {}  # answers saved under an option's old wording still count, as the new wording
     if t == 'choice':
+        v = ren.get(v, v)
         if v not in f['options']:
             raise ValueError(f'{f["id"]}: unknown option')
         return v
     if t == 'multi':
+        v = [ren.get(x, x) for x in v] if isinstance(v, list) else v
         if not isinstance(v, list) or any(x not in f['options'] for x in v):
             raise ValueError(f'{f["id"]}: unknown option')
         return sorted(set(v), key=f['options'].index)
@@ -87,6 +90,19 @@ def clean_value(pid, value, step_ids):
     for f in p['fields']:
         if not visible(f, out):
             out[f['id']] = None  # for example the mistake type once "the agent made a mistake" is unticked
+    return out
+
+
+def normalize(pid, v):
+    """Old option wording to new (see 'renamed' in the schema), for answers read back from storage."""
+    if pid not in PARTS or pid == 'flags' or not isinstance(v, dict):
+        return v
+    out = dict(v)
+    for f in part(pid)['fields']:
+        ren = f.get('renamed') or {}
+        if ren and out.get(f['id']) is not None:
+            x = out[f['id']]
+            out[f['id']] = [ren.get(y, y) for y in x] if isinstance(x, list) else ren.get(x, x)
     return out
 
 
