@@ -1,5 +1,5 @@
 {
-  "version": "oct26-v11",
+  "version": "oct26-v12",
   "intro": "One task is one build. You complete all three parts for that build: the step labels, the prompt labels and the session grade. Several experts may get the same build, so work on your own and do not compare answers.",
   "parts": [
     {
@@ -79,7 +79,7 @@
           "id": "failure",
           "type": "bool",
           "label": "The agent made a mistake in this step",
-          "help": "A mistake by the coding agent, not the user: it did something wrong, claimed something that isn't true, ignored an instruction, or did something risky. A step can still be Helped overall and contain a mistake."
+          "help": "A mistake by the coding agent, not the user: it wrote code that doesn't work, broke something, didn't do what was asked, claimed something that isn't true, gamed the tests, or did something risky. A step can still be Helped overall and contain a mistake."
         },
         {
           "id": "failure_types",
@@ -415,7 +415,7 @@
           },
           {
             "term": "Hurt",
-            "text": "The step made things worse: it broke working code, added a bug, deleted or overwrote good work, chased a wrong idea that cost later steps, claimed a result it did not get, or ignored a clear instruction. If it was the agent's mistake, tick \"The agent made a mistake\" and say what went wrong."
+            "text": "The step made things worse: it broke something that was working, wrote code that doesn't work, deleted or overwrote good work, chased a wrong idea that cost later steps, claimed a result it did not get, or didn't do what was asked. If it was the agent's mistake, tick \"The agent made a mistake\" and say what went wrong."
           },
           {
             "term": "Can't tell",
@@ -433,7 +433,7 @@
         "items": [
           {
             "term": "The user had to correct the agent's work",
-            "text": "The next prompt, or a later one, points out a mistake in this step's work or asks for it to be redone. Asking for the next task is not a correction."
+            "text": "The next prompt, or a later one, points out a mistake in this step's work or asks for it to be redone. Asking for the next piece of work is not a correction. A doubt (\"are you sure?\") counts only if the work turns out to be wrong."
           },
           {
             "term": "This step's work was undone later",
@@ -456,10 +456,10 @@
         "items": [
           {
             "term": "What counts",
-            "text": "A mistake by the coding agent, not the user: it did something wrong, claimed something that isn't true, ignored an instruction, or did something risky. A step can still be Helped overall and contain a mistake. Mark each mistake once, on the step where it happened. A failed command counts only if the agent caused it and it mattered, for example code it wrote crashed or it ran the wrong command. Say what happened in the note."
+            "text": "A mistake by the coding agent, not the user: it wrote code that doesn't work, broke something, didn't do what was asked, claimed something that isn't true, gamed the tests, or did something risky. A step can still be Helped overall and contain a mistake. Mark each mistake once, on the step where it happened, and pick every kind that fits. A failed command counts only if the agent caused it and it mattered, for example code it wrote crashed or it ran the wrong command. Say what happened in the note."
           },
           {
-            "term": "Wrote code that doesn't work (a bug, wrong logic, a crash)",
+            "term": "Wrote code that doesn't work",
             "text": "New code from the agent has a bug, wrong logic, crashes or gives the wrong output."
           },
           {
@@ -467,11 +467,11 @@
             "text": "Something that worked before this step stopped working because of the agent's change."
           },
           {
-            "term": "Didn't do what was asked (ignored or misread an instruction)",
+            "term": "Didn't do what was asked",
             "text": "The agent skipped, changed or misunderstood something the user or the task brief asked for."
           },
           {
-            "term": "Guessed instead of checking (the data, the code, the docs or the error)",
+            "term": "Guessed instead of checking",
             "text": "The agent acted on a guess it could have checked by reading the data, the code, the docs or the error. If only the user knew the answer, tick 'should have asked' instead."
           },
           {
@@ -499,7 +499,7 @@
             "text": "It tried the same fix or ran the same command again and again without learning anything new."
           },
           {
-            "term": "Ran a risky or destructive command (deleted files, force-pushed)",
+            "term": "Ran a risky or destructive command",
             "text": "It deleted files or data, force-pushed, or ran something that could do damage, without a good reason or without asking."
           },
           {
@@ -623,7 +623,7 @@
           },
           {
             "term": "Inserted by the coding tool, not typed by a person",
-            "text": "Text the tool added as if the user had typed it: the summary it writes when it compresses a long session, \"[Request interrupted by user]\", the expanded text of a slash command or skill, or hook output."
+            "text": "Text the tool added as if the user had typed it: the summary it writes when it compresses a long session, \"[Request interrupted by user]\", the expanded text of a slash command or skill, or hook output. A slash command the user typed (\"/model\") is Typed by the user; the long text the tool expands it into is not."
           },
           {
             "term": "Can't tell",
@@ -652,7 +652,7 @@
         "items": [
           {
             "term": "Fill in the obvious answers",
-            "text": "For slash commands, \"continue\" and similar prompts, this button fills the prompt questions for you. It only fills \"Did this step help?\" when the agent did almost nothing in the step. Check what it filled before you move on; you can change any answer."
+            "text": "For slash commands, \"continue\" and similar prompts, this button fills who wrote the prompt and what the user is doing with the reply. The topic can stay empty for these. It only answers \"Did this step move the build forward?\" (with Neutral) when the agent did almost nothing in the step. Check what it filled before you move on; you can change any answer."
           }
         ]
       },
@@ -700,13 +700,13 @@
         "title": "A slash command",
         "prompt": "/model",
         "what": "The tool changed its model setting. The agent did nothing else.",
-        "answer": "Neutral. The user is not replying to the agent. The prompt question can stay empty. Source: Typed by the user."
+        "answer": "Neutral. What the user is doing: Not replying to the agent. The topic can stay empty. Source: Typed by the user."
       },
       {
         "title": "\"continue\" after real work",
         "prompt": "continue",
         "what": "The agent then wrote the parser and its tests, and the tests passed.",
-        "answer": "Helped: judge the work, not the one-word prompt. The user is accepting the reply and moving on, so the prompt question can stay empty. Source: Typed by the user."
+        "answer": "Helped: judge the work, not the one-word prompt. What the user is doing: Accepting it and moving on, so the topic can stay empty. Source: Typed by the user."
       },
       {
         "title": "A claimed result",
@@ -715,10 +715,16 @@
         "answer": "Hurt. Tick \"the agent made a mistake\", pick \"Claimed a result it did not get\", and say the user caught it. The note says what was claimed. The user had to correct it."
       },
       {
+        "title": "A doubt about a claim",
+        "prompt": "are you sure all the tests pass?",
+        "what": "The agent's last reply said all tests pass. It now runs them and 3 fail.",
+        "answer": "What the user is doing: Questioning or checking the reply. Topic: Testing. On the step before, tick \"the agent made a mistake\", pick \"Claimed a result it did not get\", and tick that the user had to correct it."
+      },
+      {
         "title": "A pasted spec",
         "prompt": "A 900-word brief with headings, numbered requirements and an acceptance checklist",
         "what": "The agent built the first module from it.",
-        "answer": "About: Planning or design, and Building a feature. Source: Pasted from another AI, if it reads like model output."
+        "answer": "What the user is doing: Not replying to the agent (it is the first prompt). Topic: Planning or design, and Building a feature. Source: Pasted from another AI, if it reads like model output."
       },
       {
         "title": "Work that was undone",
@@ -730,7 +736,7 @@
         "title": "An answer to the agent's question",
         "prompt": "B",
         "what": "Just before, the agent offered A) review the diff, B) review the plan. It then reviewed the plan.",
-        "answer": "Judge the review it did. In the step before, mark that the agent asked and the question was needed. Here the user is answering the agent's question. Source: Typed by the user."
+        "answer": "Judge the review it did. In the step before, mark that the agent asked and the question was needed. What the user is doing: Answering the agent's question. Source: Typed by the user."
       }
     ]
   }
