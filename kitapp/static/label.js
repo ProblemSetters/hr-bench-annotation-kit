@@ -424,7 +424,7 @@
   function stepOverview(s, toolActs) {
     const sm = s.summary || {}, box = el('div', { class: 'overview' });
     box.append(el('div', { class: 'who-label' }, 'What the agent said'),
-      sm.reply ? el('div', { class: 'reply' }, clampable(el('div', { class: 'md' }, renderMarkdown(sm.reply)), 700, sm.reply.length, 'Show the full reply'))
+      sm.reply ? el('div', { class: 'reply' }, el('div', { class: 'md' }, renderMarkdown(sm.reply)))  // always in full
         : el('p', { class: 'muted' }, 'The agent did not write a reply in this step.'));
     if ((sm.changed || []).length) {
       const shown = sm.changed.slice(0, 6);
