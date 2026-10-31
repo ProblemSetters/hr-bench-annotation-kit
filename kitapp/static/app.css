@@ -327,14 +327,14 @@ body.labeling #app { flex: 1; min-height: 0; display: flex; flex-direction: colu
 .iconbtn { width: 32px; padding: 0; font-size: 16px; }
 
 /* session strip: one tick per step; the product's own element */
-.strip { display: flex; align-items: flex-end; gap: 1px; min-width: 0; height: 30px; margin: 14px 0 6px; }
-.tick { position: relative; flex: 1 1 0; min-width: 1px; max-width: 22px; height: 14px; border-radius: 2px; background: var(--active); text-decoration: none; }
-.tick:hover { background: var(--control); }
-.tick.partial { background: var(--data-weak); }
-.tick.done { background: var(--data); }
-.tick.cur { height: 26px; outline: 1.5px solid var(--text); outline-offset: 2px; }
-.tick.err::after { content: ""; position: absolute; left: 50%; top: -8px; width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%; background: var(--negative); }
-.tick.cur.err::after { top: -10px; }
+.strip { display: flex; flex-wrap: wrap; gap: 4px; margin: 14px 0 8px; }
+.tick { width: 28px; height: 22px; border-radius: 4px; background: var(--active); color: var(--muted); text-decoration: none;
+        display: inline-grid; place-items: center; font-size: 11px; font-variant-numeric: tabular-nums; line-height: 1; }
+.tick:hover { background: var(--control); color: var(--text); }
+.tick.partial { background: var(--data-weak); color: var(--data-ink); }
+.tick.done { background: var(--data); color: var(--on-primary); }
+.tick.cur { outline: 2px solid var(--text); outline-offset: 1px; color: var(--text); font-weight: 600; }
+.tick.done.cur { color: var(--on-primary); }
 .strip-key { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12px; color: var(--muted); margin-bottom: 20px; }
 .strip-key i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
 .strip-key i.dot { width: 6px; height: 6px; border-radius: 50%; vertical-align: 1px; }

@@ -410,10 +410,10 @@
     const L = labelable();
     const strip = el('div', { class: 'strip', role: 'list', 'aria-label': 'Steps in this session' });
     for (const s of L) {
-      const st = stepState(s), t = false;
+      const st = stepState(s);
       const what = { done: 'labelled', partial: 'partly labelled', todo: 'not labelled' }[st];
       strip.append(el('a', { href: stepHash(s, route().tab), role: 'listitem', 'aria-current': s === cur ? 'step' : null,
-        class: `tick ${st}${s === cur ? ' cur' : ''}`, title: `Step ${s.n}: ${what}${t ? ', ran tests' : ''}`, 'aria-label': `Step ${s.n}, ${what}` }));
+        class: `tick ${st}${s === cur ? ' cur' : ''}`, title: `Step ${s.n}: ${what}`, 'aria-label': `Step ${s.n}, ${what}` }, s.n));
     }
     return el('div', {}, strip, el('div', { class: 'strip-key' },
       el('span', {}, el('i', { style: { background: 'var(--data)' } }), 'Labelled'),
