@@ -273,14 +273,13 @@
   function stepMarks(s) {
     const st = s.stats || {}, sm = s.summary || {};
     const tests = (sm.metrics || []).some((m) => m.source === 'measured' && m.kind === 'tests');
-    return [st.errors ? el('span', { class: 'mark bad', title: plural(st.errors, 'error') }) : null,
-            tests ? el('span', { class: 'mark info', title: 'Ran tests' }) : null];
+    return [tests ? el('span', { class: 'mark info', title: 'Ran tests' }) : null];
   }
   function renderRail(cur) {
     const filters = [['all', 'All', 'Every step'], ['todo', 'To label', 'Steps you have not finished labelling'],
-                     ['errors', 'Errors', 'Steps where a command or tool call failed'], ['tests', 'Tests', 'Steps that ran tests or measured a score']];
+                     ['tests', 'Tests', 'Steps that ran tests']];
     const keep = (s) => S.railFilter === 'all' ? true : S.railFilter === 'todo' ? s.labelable && stepState(s) !== 'done'
-      : S.railFilter === 'errors' ? (s.stats || {}).errors > 0 : ((s.summary || {}).metrics || []).length > 0 || (s.stats || {}).tests > 0;
+: ((s.summary || {}).metrics || []).some((m) => m.kind === 'tests' && m.source === 'measured') || (s.stats || {}).tests > 0;
     const list = el('div', { class: 'rail-list', role: 'list' });
     // A build can hold several sessions: each time the builder started a new conversation with the coding tool.
     const multi = S.build.sessions.length > 1;
@@ -401,7 +400,6 @@
       st.tools ? el('a', { href: stepHash(s, 'timeline') }, plural(st.tools, 'tool call')) : el('span', { class: 'muted' }, 'No tool calls'),
       (sm.changed || []).length ? el('a', { href: stepHash(s, 'changes') }, plural(sm.changed.length, 'file') + ' changed ', el('span', { class: 'plus' }, `+${add}`), ' ', el('span', { class: 'minus' }, `−${rem}`)) : null,
       best ? el('a', { href: stepHash(s, 'checks'), class: best.failed ? 'bad' : '' }, `Tests ${best.passed}/${best.passed + best.failed} passed`) : null,
-      st.errors ? el('a', { href: stepHash(s, 'timeline'), class: 'bad' }, plural(st.errors, 'error')) : null,
       st.declined ? el('a', { href: stepHash(s, 'timeline') }, st.declined > 1 ? `Human declined ${st.declined} actions` : 'Human declined an action') : null,
       st.blocked ? el('a', { href: stepHash(s, 'timeline'), title: 'The coding tool\'s own permission check stopped the action' }, st.blocked > 1 ? `Coding tool blocked ${st.blocked} actions` : 'Coding tool blocked an action') : null,
       st.interrupts ? el('span', { class: 'bad' }, 'Interrupted') : null,
@@ -451,20 +449,16 @@
   function sessionStrip(cur) {
     const L = labelable();
     const strip = el('div', { class: 'strip', role: 'list', 'aria-label': 'Steps in this session' });
-    let errs = 0;
     for (const s of L) {
-      const st = stepState(s), e = (s.stats || {}).errors > 0, t = ((s.summary || {}).metrics || []).some((m) => m.source === 'measured' && m.kind === 'tests');
-      errs += e;
+      const st = stepState(s), t = ((s.summary || {}).metrics || []).some((m) => m.source === 'measured' && m.kind === 'tests');
       const what = { done: 'labelled', partial: 'partly labelled', todo: 'not labelled' }[st];
       strip.append(el('a', { href: stepHash(s, route().tab), role: 'listitem', 'aria-current': s === cur ? 'step' : null,
-        class: `tick ${st}${s === cur ? ' cur' : ''}${e ? ' err' : ''}`,
-        title: `Step ${s.n}: ${what}${e ? ', has errors' : ''}${t ? ', ran tests' : ''}`,
-        'aria-label': `Step ${s.n}, ${what}${e ? ', has errors' : ''}` }));
+        class: `tick ${st}${s === cur ? ' cur' : ''}`, title: `Step ${s.n}: ${what}${t ? ', ran tests' : ''}`, 'aria-label': `Step ${s.n}, ${what}` }));
     }
     return el('div', {}, strip, el('div', { class: 'strip-key' },
       el('span', {}, el('i', { style: { background: 'var(--data)' } }), 'Labelled'),
       el('span', {}, el('i', { style: { background: 'var(--active)' } }), 'Not labelled yet'),
-      errs ? el('span', {}, el('i', { class: 'dot', style: { background: 'var(--negative)' } }), 'Had errors') : null));
+    ));
   }
 
   function progressFold(n) {
@@ -518,7 +512,6 @@
     }
     const cmds = toolActs.filter((a) => a.input && a.input.command !== undefined);
     if (cmds.length) {
-      const failed = cmds.filter((a) => a.error).length;
       const list = el('div', { class: 'cmds fold-body' });
       const PAGE = 30;
       const drawCmds = (n) => {
@@ -528,7 +521,7 @@
       };
       drawCmds(PAGE);
       box.append(el('details', { class: 'fold mt-16', open: cmds.length <= 8 },
-        el('summary', {}, el('span', { class: 'chev', 'aria-hidden': 'true' }, '›'), ` Commands it ran (${cmds.length})`, failed ? el('span', { class: 'bad' }, `, ${failed} failed`) : null),
+        el('summary', {}, el('span', { class: 'chev', 'aria-hidden': 'true' }, '›'), ` Commands it ran (${cmds.length})`),
         list));
     }
     if (!toolActs.length && !sm.reply) box.append(el('p', { class: 'empty' }, 'Nothing else happened in this step.'));
@@ -546,13 +539,13 @@
     const cmd = String(a.input.command);
     const first = cmd.split('\n').find((l) => l.trim()) || '';
     const lines = cmd.split('\n').length;
-    return el('details', { class: 'cmdrow' + (a.error ? ' bad' : '') },
+    return el('details', { class: 'cmdrow' },
       el('summary', {},
-        el('span', { class: 'dot ' + (a.error ? 'bad' : 'neutral'), 'aria-hidden': 'true' }),
+        el('span', { class: 'dot neutral', 'aria-hidden': 'true' }),
         timeEl(a.ts),
         el('span', { class: 'cmdtext' }, a.input.description ? el('span', { class: 'desc' }, a.input.description) : null, el('code', {}, first)),
         el('span', { class: 'cmdmeta' }, lines > 1 ? el('span', { class: 'muted tiny' }, `${lines} lines`) : null,
-          a.result ? el('span', { class: 'badge info' }, a.result) : null, a.error ? el('span', { class: 'badge bad' }, 'failed') : null)),
+          a.result ? el('span', { class: 'badge info' }, a.result) : null)),
       el('div', { class: 'cmdbody' },
         el('pre', {}, cmd),
         a.output ? el('div', {}, el('div', { class: 'sublabel' }, 'Output'), el('pre', {}, a.output)) : el('p', { class: 'muted small' }, 'No output was recorded.')));
@@ -601,10 +594,10 @@
     if (!checks.length) return el('div', { class: 'empty card' }, 'No tests were run in this step.');
     for (const a of checks) {
       box.append(el('section', { class: 'card' },
-        el('div', { class: 'card-head' }, el('span', { class: 'dot ' + (a.error ? 'bad' : 'neutral'), style: { marginTop: 0 } }), el('h3', {}, a.error ? 'Test run crashed' : 'Test run'), timeEl(a.ts),
+        el('div', { class: 'card-head' }, el('span', { class: 'dot neutral', style: { marginTop: 0 } }), el('h3', {}, 'Test run'), timeEl(a.ts),
           (a.metrics || []).filter((m) => m.kind === 'tests').map((m) => el('span', { class: 'badge ' + (m.failed ? 'bad' : 'ok') }, readingText(m)))),
         el('pre', {}, (a.input && a.input.command) || JSON.stringify(a.input, null, 2)),
-        a.output ? el('details', { style: { marginTop: '8px' }, open: !!a.error }, el('summary', { class: 'small' }, 'Output'), el('pre', { style: { marginTop: '6px' } }, a.output)) : null));
+        a.output ? el('details', { style: { marginTop: '8px' } }, el('summary', { class: 'small' }, 'Output'), el('pre', { style: { marginTop: '6px' } }, a.output)) : null));
     }
     return box;
   }
@@ -619,9 +612,9 @@
       else if (a.k === 'tool') {
         const cmd = a.input && a.input.command !== undefined ? String(a.input.command) : null;
         const preview = cmd ? cmd.split('\n').find((l) => l.trim()) : (a.diffs || []).length ? a.diffs.map((d) => relPath(d.file)).join(', ') : (a.input && (a.input.file_path || a.input.pattern || a.input.query)) || '';
-        li = el('li', {}, el('span', { class: 'ic ' + (a.error ? 'bad' : 'tool'), 'aria-hidden': 'true' }, a.error ? '!' : 'T'),
-          el('details', { open: !!a.error }, el('summary', {}, el('div', { class: 'head' }, el('span', { class: 'chev', 'aria-hidden': 'true' }, '›'), el('span', { class: 'kind' }, shortTool(a.tool)), timeEl(a.ts),
-            a.result ? el('span', { class: 'badge info' }, a.result) : null, a.error ? el('span', { class: 'badge bad' }, 'failed') : null, a.declined ? el('span', { class: 'badge warn' }, 'declined by the human') : null, a.blocked ? el('span', { class: 'badge' }, 'blocked by the coding tool') : null, (a.diffs || []).length ? el('span', { class: 'badge' }, plural(a.diffs.length, 'file') + ' changed') : null),
+        li = el('li', {}, el('span', { class: 'ic tool', 'aria-hidden': 'true' }, 'T'),
+          el('details', {}, el('summary', {}, el('div', { class: 'head' }, el('span', { class: 'chev', 'aria-hidden': 'true' }, '›'), el('span', { class: 'kind' }, shortTool(a.tool)), timeEl(a.ts),
+            a.result ? el('span', { class: 'badge info' }, a.result) : null, a.declined ? el('span', { class: 'badge warn' }, 'declined by the human') : null, a.blocked ? el('span', { class: 'badge' }, 'blocked by the coding tool') : null, (a.diffs || []).length ? el('span', { class: 'badge' }, plural(a.diffs.length, 'file') + ' changed') : null),
             el('span', { class: 'preview' }, preview || '')),
           el('div', { class: 'body' }, (a.diffs || []).length ? a.diffs.map((d, i) => diffCard(d, i, a.diffs.length)) : cmd !== null ? el('pre', {}, (a.input.description ? '# ' + a.input.description + '\n' : '') + cmd) : el('pre', {}, JSON.stringify(a.input || {}, null, 2)),
             a.output ? el('div', {}, el('div', { class: 'sublabel', style: { margin: '4px 0' } }, 'Output'), el('pre', {}, a.output)) : null)));
@@ -691,7 +684,7 @@
   }
   function quietStep(s) {
     const st = s.stats || {};
-    return (st.tools || 0) <= 1 && !(st.errors) && !((s.summary || {}).changed || []).length;
+    return (st.tools || 0) <= 1 && !((s.summary || {}).changed || []).length;
   }
   function quickFill(s) {
     const kind = trivialKind(s);
@@ -900,7 +893,7 @@
     box.append(el('div', { class: 'tiles', style: { marginTop: '14px' } },
       tile('Coding tool', (b.trace_tools || []).join(' and ') || 'Not available', plural(b.sessions.filter((x) => x.kind === 'main').length, 'session')),
       tile('Steps to label', st.labelable_steps, `${st.all_steps} steps in total`),
-      tile('Tool calls', (st.tool_calls || 0).toLocaleString(), `${st.tool_errors || 0} failed, ${st.test_runs || 0} test runs`),
+      tile('Tool calls', (st.tool_calls || 0).toLocaleString(), `${st.test_runs || 0} test runs`),
       tile('Time span', span ? fmtDur(span) : 'Not available', first ? `${fmtTime(first)} to ${fmtTime(last)}` : ''),
       tile('Repo files', st.code_files, `${st.files_touched} changed during the session`),
       sm && outcomeOpen() ? tile('Answers', sm.rows, `${sm.status_matches_majority} match the batch majority on status`) : null,

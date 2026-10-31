@@ -364,7 +364,7 @@
         "items": [
           {
             "term": "What counts",
-            "text": "A mistake by the coding agent, not the human: it did something wrong, claimed something that isn't true, ignored an instruction, or did something risky. A step can still be Helped overall and contain a mistake. Mark each mistake once, on the step where it happened."
+            "text": "A mistake by the coding agent, not the human: it did something wrong, claimed something that isn't true, ignored an instruction, or did something risky. A step can still be Helped overall and contain a mistake. Mark each mistake once, on the step where it happened. A failed command counts only if the agent caused it and it mattered, for example code it wrote crashed or it ran the wrong command. Say what happened in the note."
           },
           {
             "term": "Claimed a result it did not get",
@@ -402,8 +402,8 @@
             "text": "How many of the lines the agent added in this step are still in the final repo. A low number often means the work was later replaced."
           },
           {
-            "term": "Errors, declined and blocked actions",
-            "text": "An error is a tool the agent misused or a command that crashed. A non-zero exit with no failure, or tests that ran and failed, is not an error. \"Human declined\" means the human said no to an action the agent wanted to take, such as a plan or a command. \"Coding tool blocked\" means the tool's own permission check stopped the action; that is not the agent's mistake either."
+            "term": "Declined and blocked actions",
+            "text": "\"Human declined\" means the human said no to an action the agent wanted to take, such as a plan or a command. \"Coding tool blocked\" means the tool's own permission check stopped it. Neither is the agent's mistake. The app does not mark errors: read the output and decide yourself."
           }
         ]
       },
