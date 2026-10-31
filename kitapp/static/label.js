@@ -679,6 +679,15 @@
         onclick: () => set(value === o ? null : o, { focus: `${fid}-${i}` }) }, o, f.keys ? el('span', { class: 'key', 'aria-hidden': 'true' }, f.keys[i]) : null))));
     } else if (f.type === 'multi') {
       const cur = new Set(value || []);
+      const toggle = (o, i) => { cur.has(o) ? cur.delete(o) : cur.add(o); set([...f.options, ...(f.retired || [])].filter((x) => cur.has(x)), { focus: `${fid}-${i}` }); };
+      if (f.options.some((o) => o.length > 30)) {  // long answers read better as a ticked list than as wrapped chips
+        wrap.append(el('div', { class: 'ticklist', role: 'group', 'aria-labelledby': fid + '-q' }, f.options.map((o, i) => {
+          const m = o.match(/^(.*?) \((.*)\)$/);
+          return el('label', { class: 'check' }, el('input', { type: 'checkbox', checked: cur.has(o), disabled: dis, 'data-fid': `${fid}-${i}`, onchange: () => toggle(o, i) }),
+            el('span', {}, m ? m[1] : o, m ? el('span', { class: 'sub' }, m[2]) : null));
+        })));
+        return wrap;
+      }
       const FEW = 99;  // show every option: hiding some made the right answer easy to miss
       const showAll = S.showAll || f.options.slice(FEW).some((o) => cur.has(o));
       const opts = showAll ? f.options : f.options.slice(0, FEW);
