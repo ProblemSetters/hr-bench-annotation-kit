@@ -143,6 +143,16 @@ class Store:
                     return f.read()
         return ''
 
+    def starter(self):
+        """Link to the builders' starter repo (dataset and starter code), if the tasks came with one."""
+        for p in (os.path.join(self.tasks_dir, 'starter.json'), os.path.join(self.tasks_dir, 'task', 'starter.json')):
+            try:
+                url = json.load(open(p, encoding='utf-8')).get('url') or ''
+                return url if re.match(r'^https://[^\s"<>]+$', url) else ''
+            except (OSError, ValueError, AttributeError):
+                continue
+        return ''
+
     def labelable_ids(self, bid):
         return [s['id'] for s in self.bundle(bid, 'steps') if s.get('labelable')]
 

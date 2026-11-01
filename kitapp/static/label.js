@@ -104,7 +104,7 @@
   function data(name) {
     if (!S.cache[name]) {
       S.cache[name] = name === 'brief'
-        ? fetch('/api/brief', { credentials: 'same-origin' }).then((r) => r.json()).then((b) => b.brief)
+        ? fetch('/api/brief', { credentials: 'same-origin' }).then((r) => r.json())
         : api('/data/' + name);
     }
     return S.cache[name];
@@ -263,9 +263,11 @@
       const s = S.lastStep || nextTodo() || labelable()[0] || S.steps[0];
       const pane = el('div', { class: 'pane calm' }, el('p', { class: 'muted' }, 'Loading…'));
       clear(box).append(renderRail(null), pane, renderStepLabels(s));
-      data('brief').then((md) => { if (route().mode === 'brief') clear(pane).append(el('h1', {}, "The builder's task"),
-        el('div', { class: 'note info', style: { margin: '8px 0 20px' } }, el('span', {}, 'This is the brief the builder was given in the hackathon. The session you are labelling is them working with an AI coding agent to build it. You don\'t need to build anything: read it once so you can judge whether each step moved the build toward this goal.')),
-        el('div', { class: 'md' }, renderMarkdown(md || 'No task brief was included with these tasks.'))); });
+      data('brief').then((b) => { if (route().mode === 'brief') clear(pane).append(el('h1', {}, "The builder's task"),
+        el('div', { class: 'note info', style: { margin: '8px 0 20px' } }, el('span', {}, 'This is the brief the builder was given in the hackathon. The session you are labelling is them working with an AI coding agent to build it. You don\'t need to build anything: read it once so you can judge whether each step moved the build toward this goal.',
+          /^https:\/\/[^\s"<>]+$/.test(b.starter || '') ? [' The dataset and starter code the builder got are in the ',
+            el('a', { href: b.starter, target: '_blank', rel: 'noopener noreferrer' }, 'starter repo'), ' (opens in a new tab).'] : null)),
+        el('div', { class: 'md' }, renderMarkdown(b.brief || 'No task brief was included with these tasks.'))); });
     } else {
       box.className = 'workspace one';
       clear(box).append(renderWrap());

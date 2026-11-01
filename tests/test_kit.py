@@ -200,6 +200,17 @@ def test_review_mode_is_read_only_and_compares():
     assert 'different version of this task' in r.get('/').text
 
 
+
+def test_brief_comes_with_the_starter_link_only_when_safe():
+    root = make_kit()
+    _, c = load_app(root, 'annotate')
+    c.post('/setup', data={**details(), 'csrf': token(c, '/setup')})
+    assert c.get('/api/brief').json() == {'brief': '# The task\nDelete ghost data.', 'starter': ''}
+    json.dump({'url': 'https://github.com/example/starter'}, open(f'{root}/tasks/starter.json', 'w'))
+    assert c.get('/api/brief').json()['starter'] == 'https://github.com/example/starter'
+    json.dump({'url': 'javascript:alert(1)'}, open(f'{root}/tasks/starter.json', 'w'))
+    assert c.get('/api/brief').json()['starter'] == ''
+
 # ---------- scripts/add_tasks.py ----------
 import subprocess  # noqa: E402
 

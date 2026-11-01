@@ -165,7 +165,7 @@ def api_schema():
 
 @app.get('/api/brief')
 def api_brief():
-    return {'brief': store.brief()}
+    return {'brief': store.brief(), 'starter': store.starter()}
 
 
 def labels_payload(rec, bid):
