@@ -326,7 +326,13 @@
   }
 
   // ---------- STEPS: main pane ----------
-  const HINTS = { choice: ['Answer to the agent\'s question', 'info'], paste: ['Contains pasted text', 'info'], slash: ['Slash command', 'info'], agent: ['Written by the parent agent', 'warn'] };
+  const HINTS = { choice: ['Answer to the agent\'s question', 'info'], paste: ['Contains pasted text', 'info'], long: ['Long prompt', 'info'], slash: ['Slash command', 'info'], agent: ['Written by the parent agent', 'warn'] };
+  // The pipeline marks a prompt "paste" when the coding tool recorded a paste, or when it is just very long; tell the two apart.
+  const promptKind = (s) => {
+    const h = s.prompt && s.prompt.hint;
+    if (h === 'paste') return /-{5} pasted text -{5}/.test(s.prompt.text || '') ? 'paste' : 'long';
+    return h === 'typed' && s.labelable && /^\/[a-z-]+(\s|$)/i.test((s.prompt.text || '').trim()) ? 'slash' : h;
+  };
   function promptBody(text) {
     const box = el('div', { class: 'prompt-text' });
     for (const chunk of text.split(/(-{5} (?:end of )?pasted text -{5})/)) {
@@ -360,7 +366,7 @@
     if (!s.labelable) notes.push('Context only. You do not label this step.');
     for (const n of notes) pane.append(el('div', { class: 'tip quiet' }, n));
 
-    const hint = s.prompt && HINTS[s.prompt.hint];
+    const hint = s.prompt && HINTS[promptKind(s)];
     pane.append(el('header', { class: 'stephead' },
       el('div', { class: 'stephead-row' },
         el('h1', {}, s.labelable ? ['Step ', s.n, el('span', { class: 'of' }, ` of ${L.length}`)] : (sess.kind === 'subagent' ? 'Subagent work' : 'Setup work')),
@@ -610,10 +616,8 @@
           if (q) q.replaceChildren(el('span', { class: 'grow' }, filled.length ? 'Filled in: ' + filled.join('; ') + '. Check them before you move on.' : 'Nothing to fill: you have already answered these.'));
         } }, 'Fill in the obvious answers')));
     }
-    const SOURCE_HINT = { choice: 'The user picked one of the options the coding tool offered, so it was typed or clicked by the user.', paste: 'The trace shows pasted text inside this prompt.', slash: 'This is a slash command typed into the coding tool.' };
     body.append(el('h3', { class: 'panel-sec' }, "The agent's work in this step"), partFields('steps', s.id), el('div', { class: 'divider' }),
       el('h3', { class: 'panel-sec' }, "The user's prompt"), partFields('prompts', s.id));
-    if (SOURCE_HINT[s.prompt.hint]) body.append(el('p', { class: 'help evidence' }, 'Evidence: ' + SOURCE_HINT[s.prompt.hint]));
     // Personal info should already be scrubbed; this is only a way to report anything that slipped through.
     const fv = { ...(S.labels[key('flags', s.id)] || {}) };
     const pii = el('p', { class: 'small report' });
@@ -636,6 +640,12 @@
     return wrap;
   }
 
+  // Hints for "Who wrote this prompt?", shown right under it.
+  const SOURCE_HINT = {
+    choice: 'Hint: the user picked one of the options the coding tool offered, so it was typed or clicked by the user.',
+    paste: 'Hint: the user pasted text into this prompt. That doesn\'t mean it came from another AI. Pick that only if it reads like model output.',
+    long: 'Hint: this prompt is very long, which often means it was pasted. Check whether it reads like model output.',
+    slash: 'Hint: this is a slash command typed into the coding tool.' };
   function partFields(pid, target) {
     const p = part(pid), k = key(pid, target);
     const v = { ...(S.labels[k] || {}) };
@@ -650,6 +660,7 @@
       if (!shown(f, ck, v)) continue;
       const reveals = p.fields.some((x) => x.show_if && f.id in x.show_if);  // ticking it opens follow-up questions
       box.append(field(f, v, (x, opts = {}) => { v[f.id] = x; save(pid, target, { ...v }); if (!opts.quiet) redraw(opts.focus); }, `${pid}-${target}-${f.id}`, ck, reveals));
+      if (pid === 'prompts' && f.id === 'source' && step && SOURCE_HINT[promptKind(step)]) box.append(el('p', { class: 'help evidence' }, SOURCE_HINT[promptKind(step)]));
       if (pid === 'steps' && f.id === 'reverted') {
         const s = S.steps.find((x) => x.id === target);
         const h = s && laterChanges(s);
