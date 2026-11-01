@@ -52,7 +52,7 @@ TOKEN = write_token()
 LOCAL_HOSTS = {'localhost', '127.0.0.1', '[::1]', '::1'}
 EMAIL = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
 YEARS = ['Less than 2 years', '2 to 5 years', '6 to 10 years', 'More than 10 years']
-TOOLS = ['Claude Code', 'Codex', 'Cursor', 'GitHub Copilot', 'Devin', 'Windsurf', 'Other']
+TOOLS = ['Claude Code', 'Codex', 'Cursor', 'GitHub Copilot', 'Devin', 'Windsurf', 'Antigravity', 'Other']
 MAX_TICK = 120
 
 store = Store(KIT_DIR, readonly=REVIEW)
