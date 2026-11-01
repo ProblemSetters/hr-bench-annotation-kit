@@ -702,11 +702,11 @@
         onchange: (e) => set(e.target.checked, reveals ? { focus: fid + '-cb' } : { quiet: true }) }), el('span', {}, f.label)));
       if (f.help) wrap.append(el('div', { class: 'help' }, f.help));
     } else if (f.type === 'text' && !req && !value && !(S.openNotes || new Set()).has(fid)) {
-      wrap.replaceChildren(el('button', { class: 'ghost sm addnote', disabled: dis, onclick: () => { (S.openNotes = S.openNotes || new Set()).add(fid); set(value || '', { focus: fid + '-ta' }); } }, '+ Add a note'));
+      wrap.replaceChildren(el('button', { class: 'ghost sm addnote', disabled: dis, onclick: () => { (S.openNotes = S.openNotes || new Set()).add(fid); set(value || '', { focus: fid + '-ta' }); } }, f.add_label || '+ Add a note'));
     } else if (f.type === 'text') {
       const count = el('div', { class: 'help num' });
       const upd = (t) => { count.textContent = f.min_chars ? `${t.trim().length} of at least ${f.min_chars} characters` : ''; };
-      const ta = el('textarea', { rows: 3, disabled: dis, 'aria-labelledby': fid + '-q', 'data-fid': fid + '-ta', autocomplete: 'off', placeholder: req ? 'Required…' : 'Optional…', oninput: (e) => { upd(e.target.value); set(e.target.value, { quiet: true }); } });
+      const ta = el('textarea', { rows: 3, disabled: dis, 'aria-labelledby': fid + '-q', 'data-fid': fid + '-ta', autocomplete: 'off', placeholder: f.placeholder || (req ? 'Required…' : 'Optional…'), oninput: (e) => { upd(e.target.value); set(e.target.value, { quiet: true }); } });
       ta.value = value || ''; upd(ta.value);
       wrap.append(ta, count);
     } else if (f.type === 'step_ref') {

@@ -1,5 +1,5 @@
 {
-  "version": "oct26-v12",
+  "version": "oct26-v13",
   "intro": "One task is one build. You complete all three parts for that build: the step labels, the prompt labels and the session grade. Several experts may get the same build, so work on your own and do not compare answers.",
   "parts": [
     {
@@ -232,6 +232,13 @@
           "renamed": {
             "Typed by the human": "Typed by the user"
           }
+        },
+        {
+          "id": "comment",
+          "type": "text",
+          "label": "Anything else about this step?",
+          "add_label": "+ Anything else about this step? (optional)",
+          "placeholder": "Something the questions above didn't cover…"
         }
       ]
     },
@@ -509,6 +516,10 @@
           {
             "term": "Did the user notice?",
             "text": "Yes when a later prompt points out the problem or asks for a fix. No when the session moves on as if nothing went wrong. Can't tell when the trace ends before you would know."
+          },
+          {
+            "term": "Anything else about this step?",
+            "text": "Optional, at the end of every step. Use it for anything worth knowing that the questions don't cover, for example the agent got the right result for the wrong reason, or the work looks copied from an earlier step. Describe a mistake in \"What went wrong?\" instead, and leave this empty when you have nothing to add."
           }
         ]
       },
