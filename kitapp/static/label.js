@@ -643,7 +643,6 @@
   // Hints for "Who wrote this prompt?", shown right under it.
   const SOURCE_HINT = {
     choice: 'Hint: the user picked one of the options the coding tool offered, so it was typed or clicked by the user.',
-    paste: 'Hint: the user pasted text into this prompt. That doesn\'t mean it came from another AI. Pick that only if it reads like model output.',
     long: 'Hint: this prompt is very long, which often means it was pasted. Check whether it reads like model output.',
     slash: 'Hint: this is a slash command typed into the coding tool.' };
   function partFields(pid, target) {
