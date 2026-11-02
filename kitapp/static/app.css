@@ -121,6 +121,9 @@ label { cursor: pointer; }
 .checkq .seg button { min-height: 32px; padding: 4px 8px; }
 .checkq .cq-step { grid-column: 1 / -1; }
 .checkq .cq-step select { width: 100%; }
+.checkq .cq-warn { color: var(--warning); margin-top: 4px; }
+.missing { margin: 12px 0 0; padding-left: 18px; font-size: 13.5px; }
+.missing li { margin: 4px 0; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chips button { font-weight: 400; min-height: 30px; padding: 0 10px; font-size: 13px; }
 .chips button[aria-pressed="true"] { border-color: var(--primary); background: var(--raised); font-weight: 500; }

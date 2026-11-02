@@ -167,6 +167,7 @@
     if (!again) retries[saveKey] = 0;
     S.labels[saveKey] = value;
     if (READONLY) return;
+    refreshFinish();
     pending.add(saveKey);
     const st = $('savestate');
     st.className = 'savestate'; st.textContent = 'Saving…';
@@ -178,7 +179,7 @@
         retries[saveKey] = 0;
         if (revisions[saveKey] === revision) pending.delete(saveKey);
         st.textContent = pending.size ? 'Saving…' : 'All changes saved';
-        renderTaskbar(); refreshRailIcons();
+        renderTaskbar(); refreshRailIcons(); refreshFinish();
       } catch (e) {
         if (revisions[saveKey] !== revision) return;  // a newer edit of this answer is already on its way
         st.className = 'savestate bad';
@@ -744,7 +745,8 @@
           el('div', { class: 'seg', role: 'group', 'aria-labelledby': qid }, ['Yes', 'No'].map((o, j) => el('button', {
             'aria-pressed': String(a.answer === o), disabled: dis, 'data-fid': `${qid}-${j}`,
             onclick: () => put({ answer: a.answer === o ? null : o, step: o === 'Yes' ? a.step : null }, { focus: `${qid}-${j}` }) }, o))),
-          a.answer === 'Yes' ? el('div', { class: 'cq-step' }, stepSelect(a.step, dis, qid, (x) => put({ step: x || null }, { quiet: true }), 'Which step shows it?')) : null));
+          a.answer === 'Yes' ? el('div', { class: 'cq-step' }, stepSelect(a.step, dis, qid, (x) => put({ step: x || null }, { quiet: !!a.step === !!x }), 'Which step shows it?'),
+            a.step || dis ? null : el('div', { class: 'cq-warn small' }, 'Pick the step that shows it. A Yes without a step counts as unanswered.')) : null));
       });
       wrap.append(list, el('div', { class: 'help num' }, `${done} of ${f.items.length} answered`));
     }
@@ -948,13 +950,45 @@
     const sp = part('session');
     pane.append(el('section', { class: 'card' }, mistakesSummary()));
     pane.append(el('section', { class: 'card' }, el('h2', {}, sp.title), el('p', { class: 'small muted', style: { margin: '4px 0 14px' } }, sp.help), wrapPart('session')));
-    const submitted = S.status === 'submitted';
-    pane.append(el('section', { class: 'card' }, el('div', { class: 'card-head' }, el('div', {}, el('h2', {}, submitted ? T.doneTitle : T.todoTitle),
-      el('p', { class: 'small muted', style: { marginTop: '4px' } }, submitted ? T.doneNote : S.complete ? T.readyNote : 'Finish the parts marked above first.')),
-      el('span', { class: 'spacer' }),
-      submitted ? el('span', { class: 'badge ok' }, T.doneTitle) : el('button', { class: 'primary', id: 'submitbtn', disabled: READONLY || !S.complete, onclick: submit }, T.button),
-      submitted && KIT && !REVIEWER ? el('button', { id: 'reopenbtn', onclick: reopen }, 'Reopen') : null)));
+    pane.append(finishCard());
     return pane;
+  }
+  function finishCard() {
+    const submitted = S.status === 'submitted', missing = submitted || READONLY ? [] : whatsMissing();
+    const ready = S.complete && !missing.length;
+    return el('section', { class: 'card', id: 'finishcard' }, el('div', { class: 'card-head' }, el('div', {}, el('h2', {}, submitted ? T.doneTitle : T.todoTitle),
+      el('p', { class: 'small muted', style: { marginTop: '4px' } }, submitted ? T.doneNote : ready ? T.readyNote : 'Still to do before you can finish:')),
+      el('span', { class: 'spacer' }),
+      submitted ? el('span', { class: 'badge ok' }, T.doneTitle) : el('button', { class: 'primary', id: 'submitbtn', disabled: READONLY || !ready, onclick: submit }, T.button),
+      submitted && KIT && !REVIEWER ? el('button', { id: 'reopenbtn', onclick: reopen }, 'Reopen') : null),
+      missing.length ? el('ul', { class: 'missing' }, missing.map((m) => el('li', {}, m))) : null);
+  }
+  function refreshFinish() {
+    const c = $('finishcard');
+    if (c) c.replaceWith(finishCard());
+  }
+  // What still blocks finishing, in words: half-done steps, unanswered session questions, checklist items with a Yes but no step.
+  function whatsMissing() {
+    const out = [], L = labelable();
+    const open = L.filter((s) => stepState(s) !== 'done');
+    if (open.length) out.push(el('span', {}, `${open.length} ${open.length === 1 ? 'step is' : 'steps are'} not fully labelled: `,
+      ...open.slice(0, 8).flatMap((s, i) => [i ? ', ' : '', el('a', { href: stepHash(s) }, `Step ${s.n}`)]), open.length > 8 ? ', …' : ''));
+    const v = S.labels[key('session', '')] || {};
+    for (const f of part('session').fields) {
+      if (f.after_outcome && !outcomeOpen()) { out.push(el('span', {}, `Shown once everything above it is answered: ${f.label}`)); continue; }
+      if (fieldsOk([f], v)) continue;
+      if (f.type === 'checklist') {
+        const x = v[f.id] || {};
+        for (const it of f.items) {
+          const a = x[it.id] || {};
+          if (a.answer === 'Yes' && !a.step) out.push(el('span', {}, `Pick the step for: ${it.label}`));
+          else if (a.answer !== 'No' && a.answer !== 'Yes') out.push(el('span', {}, `Answer Yes or No: ${it.label}`));
+        }
+      } else if (f.min_chars && v[f.id] && String(v[f.id]).trim().length < f.min_chars) {
+        out.push(el('span', {}, `Write at least ${f.min_chars} characters: ${f.label}`));
+      } else out.push(el('span', {}, `Answer: ${f.label}`));
+    }
+    return out;
   }
   function wrapPart(pid) {
     const box = el('div', {});
