@@ -173,7 +173,7 @@
             "Asking for the next piece of work",
             "Not replying to the agent (first prompt, or a new topic)"
           ],
-          "help": "If the prompt does more than one thing, pick the strongest: rejecting, then fixing, reporting an error, questioning, answering, asking for the next piece, accepting. Write what else it does in the comment box, starting with \"also:\".",
+          "help": "If the prompt does more than one thing, pick the strongest.",
           "renamed": {
             "Accepting it and moving on": "Accepting it and moving on (ok, yes, continue)",
             "Throwing the work away": "Rejecting the work (undo it, start over, try another way)",
