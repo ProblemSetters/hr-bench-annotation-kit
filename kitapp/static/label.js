@@ -996,10 +996,9 @@
     for (const f of part(pid).fields) {
       if (f.after_outcome) {
         if (!outcomeOpen()) {
-          box.append(el('div', { class: 'note info' }, el('span', {}, 'The result of this build, and one last question, appear here once the rest of the session grade is done. Judging the work first keeps the result from swaying you.')));
+          box.append(el('div', { class: 'note info' }, el('span', {}, 'One last question appears here once the rest of the session grade is done.')));
           continue;
         }
-        box.append(outcomeCard());
       }
       box.append(field(f, v, (x, opts = {}) => { v[f.id] = x; save(pid, '', { ...v }); if (!opts.quiet) { const fresh = wrapPart(pid); box.replaceWith(fresh); const t = opts.focus && fresh.querySelector(`[data-fid="${opts.focus}"]`); if (t) t.focus(); } }, `${pid}--${f.id}`));
     }
@@ -1010,17 +1009,6 @@
     if (READONLY) return true;
     const fields = part('session').fields.filter((f) => !f.after_outcome);
     return fieldsOk(fields, S.labels[key('session', '')]);
-  }
-  function outcomeCard() {
-    const box = el('div', { class: 'card outcome' }, el('h3', {}, 'The result'), el('p', { class: 'muted small' }, 'Loading…'));
-    data('output').then((out) => {
-      const sm = (out || {}).summary || {}, c = S.build.checks || {};
-      clear(box).append(el('h3', {}, 'The result'), el('ul', { class: 'cmdlist' },
-        sm.rows ? el('li', {}, el('span', { class: 'dot' }), el('span', {}, `Answers: ${sm.status_matches_majority} of ${sm.rows} match most other builds on status, ${sm.plan_matches_majority} on the deletion plan`)) : null,
-        c.agent_lines_added ? el('li', {}, el('span', { class: 'dot' }), el('span', {}, `${Math.round(100 * c.agent_lines_kept / c.agent_lines_added)}% of the code the agent added is in the final repo`)) : null),
-        el('p', { class: 'small muted' }, 'Most other builds is a comparison with this batch, not the official answer key.'));
-    }).catch(() => clear(box).append(el('h3', {}, 'The result'), el('p', { class: 'muted small' }, 'Could not load the result.')));
-    return box;
   }
   // Every mistake marked on a step, plus the numbers the pipeline flagged, so nothing is missed before the session grade.
   function mistakesSummary() {
