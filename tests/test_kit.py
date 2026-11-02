@@ -53,7 +53,7 @@ def finish_all(c, bid, steering=4):
     check = {b: {'answer': 'No'} for b in BEHAVIOURS}
     check['clarified_goal'] = {'answer': 'Yes', 'step': 'S1.1'}
     assert put('session', '', {'steering_quality': steering, 'agent_quality': 3, 'behaviours': check, 'involvement': 'They shared the work equally',
-                               'confidence': 'High', 'claims_match': 'Mostly', 'final_tests': {'none': True}, 'final_accuracy': {'value': 87.5},
+                               'confidence': 'High', 'claims_match': 'Mostly',
                                'rationale': 'The human gave a clear brief and checked each result before moving on to the next part.'}).status_code == 200
     for sid in ('S1.1', 'S1.2'):
         assert put('steps', sid, {'effect': 'Helped'}).status_code == 200
