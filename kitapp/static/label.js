@@ -501,7 +501,7 @@
   const GUIDE_FOR = { effect: 'effect', human_corrected: 'corrections', reverted: 'corrections', intent: 'intent', source: 'source',
                       steering_quality: 'session', agent_quality: 'session', training_value: 'session', type: 'session',
                       behaviours: 'session', involvement: 'session', confidence: 'session', noticed: 'session',
-                      reaction: 'reaction', asked: 'corrections', should_have_asked: 'corrections', claims_match: 'session', earned: 'session',
+                      reaction: 'reaction', asked: 'corrections', should_have_asked: 'corrections', claims_match: 'session',
                       failure: 'mistakes', failure_types: 'mistakes', noticed: 'mistakes' };
   let guideReturn = null;
   function closeGuide() {
