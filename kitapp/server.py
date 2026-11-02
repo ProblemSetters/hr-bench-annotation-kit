@@ -346,7 +346,7 @@ if not REVIEW:
         u = me_or_setup()
         need_task(bid)
         if not labels_payload(store.answers_file(u.app_id, bid), bid)['complete']:
-            raise HTTPException(400, 'All three parts must be finished first.')
+            raise HTTPException(400, 'Label every step and grade the session first.')
         store.set_status(u.app_id, bid, 'finished')
         return {'ok': True}
 

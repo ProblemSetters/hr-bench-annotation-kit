@@ -12,14 +12,14 @@
   const T = KIT ? {
     wrap: 'Wrap up & finish', done: 'finished', doneTitle: 'Finished', todoTitle: 'Mark this task as finished', button: 'Mark as finished', busy: 'Saving…',
     doneNote: 'Your answers are saved in your annotations folder. Reopen the task if you need to change something.',
-    readyNote: 'You can reopen it later if you need to.', intro: 'When all three parts are done, mark the task as finished.',
+    readyNote: 'You can reopen it later if you need to.', intro: 'When both parts are done, mark the task as finished.',
     confirm: 'Mark this task as finished? You can reopen it later.', readonly: 'Finished. Reopen it on the Wrap up page to make changes.',
     viewing: (done) => `You are viewing this person's labels (${done ? 'finished' : 'not finished yet'}). Nothing can be changed.`,
     loadHelp: 'Reload the page. If it keeps happening, copy this task folder again from the zip you were sent.',
   } : {
     wrap: 'Wrap up & submit', done: 'submitted', doneTitle: 'Submitted', todoTitle: 'Submit this task', button: 'Submit task', busy: 'Submitting…',
     doneNote: 'Your labels are locked. Ask the admin if something needs to change.',
-    readyNote: 'After you submit, your labels are locked.', intro: 'When all three parts are done, submit.',
+    readyNote: 'After you submit, your labels are locked.', intro: 'When both parts are done, submit.',
     confirm: 'Submit this task? Your labels will be locked unless the admin reopens it.', readonly: 'Submitted. This task is read only.',
     viewing: (done) => `You are viewing this person's labels (${done ? 'submitted' : 'not submitted yet'}). Nothing can be changed.`,
     loadHelp: 'Reload the page, or tell the admin if it keeps happening.',
@@ -940,10 +940,11 @@
     const item = (ok, title, sub, action) => el('li', {}, el('span', { class: 'sticon ' + (ok ? 'done' : 'todo'), 'aria-hidden': 'true' }),
       el('div', { class: 'grow' }, el('b', {}, title), el('div', { class: 'small muted' }, sub)), action || null);
     const todo = nextTodo();
+    const done = L.filter((s) => stepState(s) === 'done').length, half = L.filter((s) => stepState(s) === 'partial').length;
     pane.append(el('section', { class: 'card' }, el('ul', { class: 'checklist' },
-      item(P.steps[0] === P.steps[1], 'Part 1. Step labels', `${P.steps[0]} of ${P.steps[1]} steps answered`, todo ? el('a', { class: 'btn sm', href: stepHash(todo) }, 'Go to the next one') : null),
-      item(P.prompts[0] === P.prompts[1], 'Part 2. Prompt labels', `${P.prompts[0]} of ${P.prompts[1]} prompts answered`),
-      item(P.session[0] === 1, 'Part 3. Session grade', P.session[0] ? 'Done' : 'Fill in the form below'))));
+      item(done === L.length, 'Part 1. Steps', `${done} of ${L.length} steps labelled` + (half ? `, ${half} half done` : ''),
+        todo ? el('a', { class: 'btn sm', href: stepHash(todo) }, 'Go to the next one') : null),
+      item(P.session[0] === 1, 'Part 2. Session grade', P.session[0] ? 'Done' : 'Fill in the form below'))));
     const sp = part('session');
     pane.append(el('section', { class: 'card' }, mistakesSummary()));
     pane.append(el('section', { class: 'card' }, el('h2', {}, sp.title), el('p', { class: 'small muted', style: { margin: '4px 0 14px' } }, sp.help), wrapPart('session')));
@@ -992,7 +993,7 @@
     const box = el('div', {}, el('h2', {}, 'Agent mistakes you marked'), el('p', { class: 'small muted', style: { margin: '4px 0 14px' } },
       'Mark mistakes on the step where they happen. They are listed here so you can check them before you grade the session.'));
     const marked = labelable().filter((s) => (S.labels[key('steps', s.id)] || {}).failure);
-    box.append(marked.length ? el('ul', { class: 'cmdlist' }, marked.map((s) => {
+    box.append(marked.length ? el('ul', { class: 'cmdlist mistakes' }, marked.map((s) => {
       const v = S.labels[key('steps', s.id)] || {};
       return el('li', {}, el('span', { class: 'dot bad', 'aria-hidden': 'true' }),
         el('span', { class: 'cmdtext' }, el('a', { href: stepHash(s), class: 'small' }, `Step ${s.n}`),

@@ -1,6 +1,6 @@
 {
   "version": "oct26-v15",
-  "intro": "One task is one build. You complete all three parts for that build: the step labels, the prompt labels and the session grade. Several experts may get the same build, so work on your own and do not compare answers.",
+  "intro": "One task is one build. You complete both parts for that build: the step labels (the agent's turn and the prompt) and the session grade. Several experts may get the same build, so work on your own and do not compare answers.",
   "parts": [
     {
       "id": "steps",
