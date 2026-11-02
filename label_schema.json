@@ -1,5 +1,5 @@
 {
-  "version": "oct26-v13",
+  "version": "oct26-v14",
   "intro": "One task is one build. You complete all three parts for that build: the step labels, the prompt labels and the session grade. Several experts may get the same build, so work on your own and do not compare answers.",
   "parts": [
     {
@@ -44,9 +44,10 @@
             "Ran tests",
             "Ran an accuracy check",
             "Both",
-            "Neither"
+            "Neither",
+            "Nothing to check (no code or answers changed)"
           ],
-          "help": "Look at the commands and their output in Agent's raw actions. An accuracy check is a script that scores the agent's answers, for example on the task's sample cases."
+          "help": "Look at the commands and their output in Agent's raw actions. An accuracy check is a script that scores the agent's answers, for example on the task's sample cases. Pick Neither when the agent changed code or answers and didn't check them. Pick Nothing to check when the step only asked a question, planned or explained."
         },
         {
           "id": "asked",
@@ -452,7 +453,7 @@
           },
           {
             "term": "Did the agent check its work?",
-            "text": "Ran tests: it ran a test suite (pytest, npm test and similar). Ran an accuracy check: it ran a script that scores its answers, for example against the task's sample cases. Reading a test file is not running it."
+            "text": "Ran tests: it ran a test suite (pytest, npm test and similar). Ran an accuracy check: it ran a script that scores its answers, for example against the task's sample cases. Reading a test file is not running it. Nothing to check: the step changed no code or answers, for example a question, a plan or an explanation."
           }
         ]
       },
