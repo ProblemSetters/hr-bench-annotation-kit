@@ -25,7 +25,7 @@
     loadHelp: 'Reload the page, or tell the admin if it keeps happening.',
   };
   const S = { schema: null, build: null, steps: [], labels: {}, progress: null, complete: false, status: '', cache: {},
-              railFilter: 'all', outFilter: 'all', outPage: 0, repoQuery: '', repoChangedOnly: false, openDirs: new Set() };
+              railFilter: 'all', outPage: 0, repoQuery: '', repoChangedOnly: false, openDirs: new Set() };
   const key = (p, t) => p + '|' + (t || '');
   const $ = (id) => document.getElementById(id);
   const SVGNS = 'http://www.w3.org/2000/svg';
@@ -771,7 +771,7 @@
       if (section === 'summary') node = await finalSummary();
       else if (section === 'repo') node = finalRepo(await data('code'), arg);
       else if (section === 'answers') node = outcomeOpen() ? finalAnswers(await data('output'))
-        : el('div', { class: 'pane-narrow' }, el('h1', {}, 'Answers (output.csv)'), el('div', { class: 'note info', style: { marginTop: '14px' } }, el('span', {}, 'The answers and how they compare with other builds appear after you finish the session grade on the Wrap up page. Judging the work first keeps the result from swaying you.')));
+        : el('div', { class: 'pane-narrow' }, el('h1', {}, 'Answers (output.csv)'), el('div', { class: 'note info', style: { marginTop: '14px' } }, el('span', {}, 'The answers appear after you finish the session grade on the Wrap up page. Judging the work first keeps the result from swaying you.')));
       else node = await finalSummary();
     } catch (e) { node = el('div', { class: 'note warn' }, 'Could not load this section: ' + e.message); }
     if (route().mode === 'final') clear(host).append(node);
@@ -788,7 +788,6 @@
       tile('Tool calls', (st.tool_calls || 0).toLocaleString(), ''),
       tile('Time span', span ? fmtDur(span) : 'Not available', first ? `${fmtTime(first)} to ${fmtTime(last)}` : ''),
       tile('Repo files', st.code_files, `${st.files_touched} changed during the session`),
-      sm && outcomeOpen() ? tile('Answers', sm.rows, `${sm.status_matches_majority} match the batch majority on status`) : null,
       (b.checks || {}).agent_lines_added ? tile('Agent code kept', `${Math.round(100 * b.checks.agent_lines_kept / b.checks.agent_lines_added)}%`, `of ${b.checks.agent_lines_added.toLocaleString()} lines it added are in the final repo`) : null,
       (b.checks || {}).final_code_lines ? tile('Code not from agent edits', `${Math.round(100 * b.checks.final_code_lines_untraced / b.checks.final_code_lines)}%`, 'written by the user, by shell commands, or before the session') : null));
     const models = Object.entries(b.models || {});
@@ -873,18 +872,14 @@
     const counts = Object.entries(sm.status_counts || {});
     const colors = { COMPLETE: 'var(--success)', INCOMPLETE: 'var(--warn)', NOT_APPLICABLE: 'var(--text-3)' };
     const box = el('div', {}, el('h1', {}, 'Answers (output.csv)'),
-      el('p', { class: 'muted', style: { marginTop: '4px' } }, `${sm.rows} answers. "Majority" means most of the ${sm.batch_builds} builds in this batch. It is not the answer key, so disagreeing with it is not proof of an error.`));
+      el('p', { class: 'muted', style: { marginTop: '4px' } }, `${sm.rows} answers.`));
     box.append(el('div', { class: 'tiles', style: { margin: '14px 0' } },
       el('div', { class: 'tile' }, el('div', { class: 'label' }, 'Statuses'), el('div', { class: 'stack', style: { margin: '10px 0 8px' } }, counts.map(([k, v]) => el('span', { style: { width: (100 * v / sm.rows) + '%', background: colors[k] || 'var(--info)' }, title: `${k}: ${v}` }))),
-        el('div', { class: 'legend' }, counts.map(([k, v]) => el('span', {}, el('i', { style: { background: colors[k] || 'var(--info)' } }), `${k.replace('_', ' ').toLowerCase()} ${v}`)))),
-      tile('Status matches majority', `${sm.status_matches_majority} of ${sm.rows}`, pct(sm.status_matches_majority / sm.rows)),
-      tile('Full plan matches majority', `${sm.plan_matches_majority} of ${sm.rows}`, pct(sm.plan_matches_majority / sm.rows))));
-    const filtered = rows.filter((r) => S.outFilter === 'all' || (S.outFilter === 'status' ? !r.status_matches_majority : !r.plan_matches_majority));
+        el('div', { class: 'legend' }, counts.map(([k, v]) => el('span', {}, el('i', { style: { background: colors[k] || 'var(--info)' } }), `${k.replace('_', ' ').toLowerCase()} ${v}`))))));
+    const filtered = rows;
     const per = 50, pages = Math.max(1, Math.ceil(filtered.length / per));
     S.outPage = Math.min(S.outPage, pages - 1);
     box.append(el('div', { class: 'toolbar' },
-      el('div', { class: 'seg', role: 'group', 'aria-label': 'Filter answers' }, [['all', 'All'], ['status', 'Status differs'], ['plan', 'Plan differs']].map(([id, l]) =>
-        el('button', { 'aria-pressed': String(S.outFilter === id), onclick: () => { S.outFilter = id; S.outPage = 0; render(); } }, l))),
       el('span', { class: 'spacer' }), el('span', { class: 'small muted num' }, `${filtered.length} cases, page ${S.outPage + 1} of ${pages}`),
       el('button', { class: 'sm', disabled: S.outPage === 0, onclick: () => { S.outPage--; render(); } }, 'Previous'),
       el('button', { class: 'sm', disabled: S.outPage >= pages - 1, onclick: () => { S.outPage++; render(); } }, 'Next')));
@@ -893,13 +888,11 @@
       const steps = Array.isArray(r.steps) ? r.steps : [];
       tb.append(el('tr', {}, el('td', { class: 'mono' }, r.case_id),
         el('td', {}, el('span', { class: 'badge ' + (r.status === 'COMPLETE' ? 'ok' : r.status === 'INCOMPLETE' ? 'warn' : '') }, r.status)),
-        el('td', {}, r.status_matches_majority ? el('span', { class: 'muted small' }, 'Same') : el('span', { class: 'small' }, 'Majority says ', el('b', {}, r.majority_status))),
-        el('td', {}, r.plan_matches_majority ? el('span', { class: 'muted small' }, 'Same') : el('span', { class: 'badge warn' }, 'Different')),
         el('td', {}, steps.length ? el('details', {}, el('summary', { class: 'small' }, plural(r.steps_total || steps.length, 'step')),
           el('table', { style: { marginTop: '6px' } }, el('tbody', {}, steps.map((x) => el('tr', {}, ['step_no', 'phase', 'operation', 'system_id', 'resource_id', 'state', 'evidence_id'].map((k) => el('td', { class: 'tiny mono' }, x[k] ?? '')))))),
           r.steps_total > steps.length ? el('p', { class: 'tiny muted' }, `First ${steps.length} of ${r.steps_total} shown.`) : null) : el('span', { class: 'muted small' }, 'No steps'))));
     }
-    box.append(el('div', { class: 'table-wrap' }, el('table', {}, el('thead', {}, el('tr', {}, ['Case', 'Status', 'Status vs majority', 'Plan vs majority', 'Plan'].map((h) => el('th', {}, h)))), tb)));
+    box.append(el('div', { class: 'table-wrap' }, el('table', {}, el('thead', {}, el('tr', {}, ['Case', 'Status', 'Plan'].map((h) => el('th', {}, h)))), tb)));
     return box;
   }
 
