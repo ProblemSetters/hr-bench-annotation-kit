@@ -295,12 +295,13 @@ class Store:
 
     def progress(self, app_id, bid):
         rec = self.load(app_id, bid, repair=False) or {}
-        prog, complete = L.progress(to_map(rec.get('answers') or {}), self.labelable_ids(bid), self.step_checks(bid))
+        lm, ids, ck = to_map(rec.get('answers') or {}), self.labelable_ids(bid), self.step_checks(bid)
+        prog, complete = L.progress(lm, ids, ck)
         done = sum(d for d, _ in prog.values())
         total = sum(t for _, t in prog.values()) or 1
         return {'prog': prog, 'complete': complete, 'pct': round(100 * done / total),
                 'parts': sum(1 for d, t in prog.values() if d == t), 'status': rec.get('status', 'not_started'),
-                'secs': int(rec.get('active_seconds') or 0), 'rec': rec}
+                'secs': int(rec.get('active_seconds') or 0), 'rec': rec, 'labelled': L.steps_labelled(lm, ids, ck)}
 
     # ---------- export ----------
     def export(self, app_id, kit_version='', pledged=False):
@@ -319,7 +320,7 @@ class Store:
                 p = self.progress(app_id, bid)
                 rec = p['rec']
                 tasks.append({'build_id': bid, 'status': p['status'], 'complete': p['complete'],
-                              'steps_answered': p['prog']['steps'][0], 'steps_total': p['prog']['steps'][1],
+                              'steps_answered': p['labelled'], 'steps_total': p['prog']['steps'][1],
                               'active_seconds': p['secs'], 'task_fingerprint': self.fingerprint(bid),
                               'answers_made_on': rec.get('task_fingerprint')})
             names = [META] + sorted(f for f in os.listdir(folder) if f.endswith('.json') and f not in (META, 'manifest.json'))

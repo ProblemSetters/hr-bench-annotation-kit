@@ -176,6 +176,15 @@ def progress(labels, labelable_ids, checks=None):
     return out, complete
 
 
+def steps_labelled(labels, labelable_ids, checks=None):
+    """Steps with both halves answered: the agent's turn and the prompt. One half alone doesn't count."""
+    checks = checks or {}
+    sf, pf = part('steps')['fields'], part('prompts')['fields']
+    return sum(1 for sid in labelable_ids
+               if labels.get(('steps', sid)) and _fields_ok(sf, labels[('steps', sid)], checks.get(sid))
+               and labels.get(('prompts', sid)) and _fields_ok(pf, labels[('prompts', sid)], checks.get(sid)))
+
+
 def failures_of(labels):
     """Agent mistakes marked on steps, as one list for exports: step, types, whether the human noticed, note."""
     return [{'step': t, 'types': v.get('failure_types') or [], 'noticed': v.get('noticed'), 'note': v.get('note')}

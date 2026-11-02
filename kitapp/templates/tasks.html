@@ -25,7 +25,7 @@
   <td><b>{{ r.bid }}</b></td>
   <td class="small">{{ r.info.trace_tools|join(' and ') }}</td>
   <td class="num">{{ r.info.steps }}</td>
-  <td><div class="progress-cell"><progress max="{{ p.steps[1] * 2 + 1 }}" value="{{ p.steps[0] + p.prompts[0] + p.session[0] }}" class="{{ 'done' if r.complete }}"></progress><span class="small num">{{ p.steps[0] }}/{{ p.steps[1] }} steps</span></div></td>
+  <td><div class="progress-cell"><progress max="{{ p.steps[1] * 2 + 1 }}" value="{{ p.steps[0] + p.prompts[0] + p.session[0] }}" class="{{ 'done' if r.complete }}"></progress><span class="small num">{{ r.labelled }}/{{ p.steps[1] }} steps</span></div></td>
   <td class="small num">{{ r.secs|dur }}</td>
   <td><span class="status {{ status_class[r.status] }}">{{ status_word[r.status] }}</span></td>
   <td class="num"><a class="btn {{ '' if r.status == 'finished' else 'primary' }} sm" href="/label/{{ r.bid }}">{{ 'View' if r.status == 'finished' else 'Continue' if r.status == 'in_progress' else 'Start' }}</a></td>
