@@ -1,5 +1,5 @@
 {
-  "version": "oct26-v14",
+  "version": "oct26-v15",
   "intro": "One task is one build. You complete all three parts for that build: the step labels, the prompt labels and the session grade. Several experts may get the same build, so work on your own and do not compare answers.",
   "parts": [
     {
@@ -173,6 +173,7 @@
             "Asking for the next piece of work",
             "Not replying to the agent (first prompt, or a new topic)"
           ],
+          "help": "If the prompt does more than one thing, pick the strongest: rejecting, then fixing, reporting an error, questioning, answering, asking for the next piece, accepting. Write what else it does in the comment box, starting with \"also:\".",
           "renamed": {
             "Accepting it and moving on": "Accepting it and moving on (ok, yes, continue)",
             "Throwing the work away": "Rejecting the work (undo it, start over, try another way)",
@@ -239,7 +240,7 @@
           "type": "text",
           "label": "Anything else about this step?",
           "add_label": "+ Anything else about this step? (optional)",
-          "placeholder": "Something the questions above didn't cover…"
+          "placeholder": "Something the questions above didn't cover, or also: what else the prompt does…"
         }
       ]
     },
@@ -542,7 +543,7 @@
       {
         "id": "reaction",
         "title": "What is the user doing with the agent's last reply?",
-        "help": "Look at the agent's final response in the step before (press k to go back), then pick the closest one. If the prompt does several things, pick the main one.",
+        "help": "Look at the agent's final response in the step before (press k to go back), then pick the closest one. If the prompt does more than one thing, pick the strongest, in this order: rejecting, fixing, reporting an error, questioning, answering, asking for the next piece, accepting. So \"ok, now add tests\" is asking for the next piece, and \"that's wrong, also update the README\" is fixing. Write what else it does in the comment box, starting with \"also:\".",
         "items": [
           {
             "term": "Accepting it and moving on",
