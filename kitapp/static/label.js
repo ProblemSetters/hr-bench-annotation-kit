@@ -387,8 +387,8 @@
       el('span', {}, sess.tool),
       st.tools ? el('a', { href: stepHash(s, 'timeline') }, plural(st.tools, 'tool call')) : el('span', { class: 'muted' }, 'No tool calls'),
       (sm.changed || []).length ? el('a', { href: stepHash(s, 'changes') }, plural(sm.changed.length, 'file') + ' changed ', el('span', { class: 'plus' }, `+${add}`), ' ', el('span', { class: 'minus' }, `−${rem}`)) : null,
-      st.declined ? el('a', { href: stepHash(s, 'timeline') }, st.declined > 1 ? `User declined ${st.declined} actions` : 'User declined an action') : null,
-      st.blocked ? el('a', { href: stepHash(s, 'timeline'), title: 'The coding tool\'s own permission check stopped the action' }, st.blocked > 1 ? `Coding tool blocked ${st.blocked} actions` : 'Coding tool blocked an action') : null,
+      st.declined ? el('a', { href: stepHash(s, 'timeline'), onclick: (e) => { S.pinAct = 'declined'; if (location.hash === stepHash(s, 'timeline')) { e.preventDefault(); render(); } }, title: 'Show it in Agent\'s raw actions' }, st.declined > 1 ? `User declined ${st.declined} actions` : 'User declined an action') : null,
+      st.blocked ? el('a', { href: stepHash(s, 'timeline'), onclick: (e) => { S.pinAct = 'blocked'; if (location.hash === stepHash(s, 'timeline')) { e.preventDefault(); render(); } }, title: 'The coding tool\'s own permission check stopped the action. Show it in Agent\'s raw actions' }, st.blocked > 1 ? `Coding tool blocked ${st.blocked} actions` : 'Coding tool blocked an action') : null,
       st.interrupts ? el('span', { class: 'bad' }, 'Interrupted') : null,
       ...checkFacts(s),
     ].filter(Boolean);
@@ -482,19 +482,54 @@
         el('div', { class: 'body' }, clampable(el('div', { class: 'md' }, renderMarkdown(a.text)), 700, a.text.length, 'Show more')));
       else if (a.k === 'tool') {
         const cmd = a.input && a.input.command !== undefined ? String(a.input.command) : null;
-        const preview = cmd ? cmd.split('\n').find((l) => l.trim()) : (a.diffs || []).length ? a.diffs.map((d) => relPath(d.file)).join(', ') : (a.input && (a.input.file_path || a.input.pattern || a.input.query)) || '';
-        li = el('li', {}, el('span', { class: 'ic tool', 'aria-hidden': 'true' }, 'T'),
-          el('details', { open: true }, el('summary', {}, el('div', { class: 'head' }, el('span', { class: 'chev', 'aria-hidden': 'true' }, '›'), el('span', { class: 'kind' }, shortTool(a.tool)), timeEl(a.ts),
+        const plan = planOf(a);
+        const preview = plan !== null ? (plan.split('\n').find((l) => l.trim()) || '').replace(/^#+\s*/, '') : cmd ? cmd.split('\n').find((l) => l.trim()) : (a.diffs || []).length ? a.diffs.map((d) => relPath(d.file)).join(', ') : (a.input && (a.input.file_path || a.input.pattern || a.input.query)) || '';
+        const kind = plan !== null ? (a.declined ? 'Plan sent back for changes' : /approved your plan/i.test(a.output || '') ? 'Plan approved' : 'Plan shown for approval') : shortTool(a.tool);
+        li = el('li', { class: [a.declined ? 'is-declined' : '', a.blocked ? 'is-blocked' : ''].join(' ').trim() || null }, el('span', { class: 'ic tool', 'aria-hidden': 'true' }, 'T'),
+          el('details', { open: true }, el('summary', {}, el('div', { class: 'head' }, el('span', { class: 'chev', 'aria-hidden': 'true' }, '›'), el('span', { class: 'kind' }, kind), timeEl(a.ts),
             a.declined ? el('span', { class: 'badge warn' }, 'declined by the user') : null, a.blocked ? el('span', { class: 'badge' }, 'blocked by the coding tool') : null, (a.diffs || []).length ? el('span', { class: 'badge' }, plural(a.diffs.length, 'file') + ' changed') : null),
             el('span', { class: 'preview' }, preview || '')),
-          el('div', { class: 'body' }, (a.diffs || []).length ? a.diffs.map((d, i) => diffCard(d, i, a.diffs.length)) : cmd !== null ? el('pre', {}, (a.input.description ? '# ' + a.input.description + '\n' : '') + cmd) : el('pre', {}, JSON.stringify(a.input || {}, null, 2)),
+          el('div', { class: 'body' }, a.declined || a.blocked ? outcomeNote(a) : null,
+            (a.diffs || []).length ? a.diffs.map((d, i) => diffCard(d, i, a.diffs.length))
+              : plan !== null ? el('div', {}, el('div', { class: 'sublabel', style: { margin: '4px 0' } }, 'The plan'), clampable(el('div', { class: 'md planbox' }, renderMarkdown(plan)), 1200, plan.length, 'Show the full plan'))
+              : cmd !== null ? el('pre', {}, (a.input.description ? '# ' + a.input.description + '\n' : '') + cmd) : el('pre', {}, JSON.stringify(a.input || {}, null, 2)),
             a.output ? el('div', {}, el('div', { class: 'sublabel', style: { margin: '4px 0' } }, 'Output'), el('pre', {}, a.output)) : null)));
       } else if (a.k === 'think') li = el('li', {}, el('span', { class: 'ic', 'aria-hidden': 'true' }, 'R'), el('details', { open: true }, el('summary', {}, el('div', { class: 'head' }, el('span', { class: 'chev' }, '›'), el('span', { class: 'kind muted' }, 'Agent reasoning summary'), timeEl(a.ts))), el('div', { class: 'body' }, el('div', { class: 'prose small' }, a.text))));
       else if (a.k === 'interrupt') li = el('li', {}, el('span', { class: 'ic bad', 'aria-hidden': 'true' }, '!'), el('div', { class: 'head' }, el('span', { class: 'kind', style: { color: 'var(--negative)' } }, 'The user interrupted the agent'), timeEl(a.ts)));
       else li = el('li', {}, el('span', { class: 'ic sys', 'aria-hidden': 'true' }, 'S'), el('details', { open: true }, el('summary', {}, el('div', { class: 'head' }, el('span', { class: 'chev' }, '›'), el('span', { class: 'kind muted' }, a.text.split('\n')[0].slice(0, 120)), timeEl(a.ts))), el('div', { class: 'body' }, el('pre', {}, a.text))));
       ol.append(li);
     }
+    if (S.pinAct) {  // came from "User declined an action" or "Coding tool blocked an action": go to it
+      const want = S.pinAct; S.pinAct = null;
+      setTimeout(() => { const t = ol.querySelector('li.is-' + want); if (t) { t.scrollIntoView({ block: 'center' }); t.classList.add('pinned'); } }, 0);
+    }
     return ol;
+  }
+  // A plan the agent asked the user to approve (Claude Code's plan mode), as text. null for any other tool.
+  function planOf(a) {
+    if (shortTool(a.tool) !== 'ExitPlanMode' || !a.input) return null;
+    let v = a.input;
+    if (typeof v.input === 'string') {
+      // Some traces keep raw tabs or line breaks inside the JSON text, and long inputs are cut by the pipeline.
+      const safe = (t) => t.replace(/[\u0000-\u001f]/g, (c) => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
+      try { v = JSON.parse(safe(v.input)); } catch (e) {
+        const m = /"plan"\s*:\s*"((?:[^"\\]|\\.)*)/.exec(v.input);
+        if (!m) return v.input;
+        const body = m[1].replace(/\\(u[0-9a-fA-F]{0,3})?$/, '');
+        try { return JSON.parse('"' + safe(body) + '"') + '\n\n(The rest of the plan was cut.)'; } catch (e2) { return body; }
+      }
+    }
+    return typeof v.plan === 'string' ? v.plan : null;
+  }
+  // What the user said when they turned an action down, pulled out of the tool's reply and shown first.
+  function outcomeNote(a) {
+    if (a.blocked) return el('div', { class: 'note warn', style: { marginBottom: '8px' } }, el('span', {}, 'The coding tool\'s own permission check stopped this action. It is not the agent\'s mistake.'));
+    const m = /the user said:\s*([\s\S]*?)(?:\n\s*\nNote:|$)/i.exec(a.output || '');
+    const said = m ? m[1].trim() : '';
+    const what = said === '[redacted]' ? 'They typed a reason, but their coding tool\'s trace export removed it. Their next prompt may say what they wanted.'
+      : said ? null : 'No reason was given with the decline.';
+    return el('div', { class: 'note warn', style: { marginBottom: '8px', display: 'block' } },
+      el('b', {}, 'The user said no to this.'), ' ', what || 'Their reason:', what ? null : el('div', { class: 'prose small', style: { marginTop: '4px' } }, said));
   }
 
   // ---------- labelling guide (text lives in label_schema.json -> guide) ----------

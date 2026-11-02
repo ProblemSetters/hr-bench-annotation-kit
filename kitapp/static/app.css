@@ -427,6 +427,8 @@ time.when { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-
 .tl .ic.tool { background: var(--raised); color: var(--text); border: 1px solid var(--border); }
 .tl .ic.bad { background: var(--pill-negative-bg); color: var(--pill-negative-ink); }
 .tl .ic.sys { background: var(--pill-warning-bg); color: var(--pill-warning-ink); }
+.tl > li.pinned > details { outline: 2px solid var(--warning); outline-offset: 4px; border-radius: 6px; }
+.planbox { border-left: 2px solid var(--border); padding-left: 12px; }
 .tl .head { display: flex; align-items: center; gap: 8px; font-size: 13.5px; flex-wrap: wrap; }
 .tl .head .kind { font-weight: 600; }
 .tl details > summary { cursor: pointer; list-style: none; }
