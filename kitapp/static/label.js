@@ -940,13 +940,14 @@
     while (i < lines.length) {
       const l = lines[i];
       if (l.startsWith('```')) { const buf = []; i++; while (i < lines.length && !lines[i].startsWith('```')) buf.push(lines[i++]); i++; box.append(el('pre', {}, buf.join('\n'))); continue; }
-      const h = l.match(/^(#{1,3})\s+(.*)/);
-      if (h) { box.append(el('h' + h[1].length, {}, inline(h[2]))); i++; continue; }
+      const h = l.match(/^(#{1,6})\s+(.*)/);
+      if (h) { box.append(el('h' + Math.min(h[1].length, 4), {}, inline(h[2]))); i++; continue; }
       if (/^\s*\d+[.)]\s+/.test(l)) { const ol = el('ol', {}); while (i < lines.length && /^\s*\d+[.)]\s+/.test(lines[i])) ol.append(el('li', {}, inline(lines[i++].replace(/^\s*\d+[.)]\s+/, '')))); box.append(ol); continue; }
       if (/^\s*[-*]\s+/.test(l)) { const ul = el('ul', {}); while (i < lines.length && /^\s*[-*]\s+/.test(lines[i])) ul.append(el('li', {}, inline(lines[i++].replace(/^\s*[-*]\s+/, '')))); box.append(ul); continue; }
       if (/^\|/.test(l)) { const buf = []; while (i < lines.length && /^\|/.test(lines[i])) buf.push(lines[i++]); box.append(mdTable(buf)); continue; }
       if (!l.trim()) { i++; continue; }
-      const buf = []; while (i < lines.length && lines[i].trim() && !/^(#|```|\||\s*[-*]\s)/.test(lines[i])) buf.push(lines[i++]);
+      // The first line is always taken, so a line no rule above matches (such as "#tag") can't stall the loop.
+      const buf = [lines[i++]]; while (i < lines.length && lines[i].trim() && !/^(#|```|\||\s*[-*]\s)/.test(lines[i])) buf.push(lines[i++]);
       box.append(el('p', {}, inline(buf.join(' '))));
     }
     return box;
