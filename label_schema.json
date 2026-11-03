@@ -1,5 +1,5 @@
 {
-  "version": "oct26-v19",
+  "version": "oct26-v20",
   "intro": "One task is one build. You complete both parts for that build: the step labels (the agent's turn and the prompt) and the session grade. Several experts may get the same build, so work on your own and do not compare answers.",
   "parts": [
     {
@@ -438,6 +438,10 @@
           {
             "term": "What counts",
             "text": "A mistake by the coding agent, not the user: it wrote code that doesn't work, broke something, didn't do what was asked, claimed something that isn't true, gamed the tests, or did something risky. A step can still be Helped overall and contain a mistake. Mark each mistake once, on the step where it happened, and pick every kind that fits. A failed command counts only if the agent caused it and it mattered, for example code it wrote crashed or it ran the wrong command. Say what happened in the note."
+          },
+          {
+            "term": "[REDACTED] in code, commands or output",
+            "text": "Emails, user ids, phone numbers and keys were replaced with [REDACTED] before the session reached us. The replacement sometimes cuts into code, for example email=[REDACTED]].strip() where the code read the email from a row. The agent did not write it that way. Don't mark it as a mistake: judge the code as if the real value were there."
           },
           {
             "term": "Wrote code that doesn't work",
