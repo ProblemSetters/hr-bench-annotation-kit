@@ -262,8 +262,11 @@ tr.sel td { background: var(--raised) !important; }
 .agree { display: inline-flex; align-items: center; gap: 10px; }
 
 /* ---------- labeling workspace ---------- */
-body.labeling { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
-body.labeling main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+/* Grid, not flex: browser extensions add their own blocks to <body>, and in a flex column they took
+   height from the workspace. Anything after the header and main gets a zero-height row instead. */
+body.labeling { height: 100vh; display: grid; grid-template-rows: auto minmax(0, 1fr); grid-auto-rows: 0; grid-template-columns: minmax(0, 1fr); overflow: hidden; }
+body.labeling > .top { grid-row: 1; }
+body.labeling main { grid-row: 2; min-height: 0; display: flex; flex-direction: column; }
 body.labeling #app { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .taskbar { display: grid; grid-template-columns: 272px minmax(0, 1fr) 340px; align-items: center; padding: 0 8px 0 0; min-height: 52px; background: var(--frame); }
 .taskbar.two { grid-template-columns: 228px minmax(0, 1fr) 340px; }
@@ -549,7 +552,7 @@ button.linkbtn:hover { color: var(--text); }
   .taskprog { margin-left: auto; padding: 0; }
 }
 @media (max-width: 760px) {
-  body.labeling { height: auto; overflow: auto; }
+  body.labeling { height: auto; overflow: auto; display: block; }
   .workspace, .workspace.two { grid-template-columns: 1fr; grid-template-rows: none; padding: 0 0 8px; }
   .workspace > * { overflow: visible; }
   .workspace > .rail { max-height: 220px; overflow: auto; }
